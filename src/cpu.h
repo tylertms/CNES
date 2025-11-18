@@ -7,8 +7,19 @@
 
 #define IN(opcode, mode, cycles, opcount) {#opcode, #mode, op_##opcode, am_##mode, cycles, opcount}
 #define ILLEGAL_INSTRUC IN(___, ___, 0, 0)
-#define OPF(opcode) op_##opcode(_cpu* cpu)
-#define AMF(mode) am_##mode(_cpu* cpu)
+#define OPF(opcode) op_##opcode(_nes* nes)
+#define AMF(mode) am_##mode(_nes* nes)
+
+typedef struct _nes _nes;
+
+typedef struct _instr {
+    char opcode[4];             // name of opcode
+    char mode[4];               // name of addressing mode
+    uint8_t (*ex_op)(_nes*);    // fn pointer to operation
+    uint8_t (*ex_am)(_nes*);    // fn pointer to addressing mode
+    uint8_t cycles;             // number of cpu cycles for execution
+    uint8_t opcount;            // number of operands after opcode
+} _instr;
 
 typedef struct _cpu {
     uint8_t a;              // accumulator
@@ -16,20 +27,29 @@ typedef struct _cpu {
     uint8_t y;              // y register
     uint8_t p;              // status flags
     uint8_t s;              // stack pointer
-    uint8_t pc;             // program counter
+    uint16_t pc;            // program counter
+
+    _instr instr;           // active instruction
+    uint16_t op_addr;       // address of first operand
+    uint8_t op_data;        // data buffer from address mode to operation
+
+    uint8_t halt;
     uint8_t cycles;         // instr cycle counter
     uint8_t irq_pending;    // interrupt request
     uint8_t nmi_pending;    // non-maskable interrupt
+    uint8_t ram[0x800];     // cpu memory
 } _cpu;
 
-typedef struct _instr {
-    char opcode[4];
-    char mode[4];
-    uint8_t (*ex_op)(_cpu*);
-    uint8_t (*ex_am)(_cpu*);
-    uint8_t cycles;
-    uint8_t opcount;
-} _instr;
+typedef enum _cpu_flag {
+    _C = (1 << 0),  // carry
+    _Z = (1 << 1),  // zero
+    _I = (1 << 2),  // interrupt disable
+    _D = (1 << 3),  // decimal
+    _B = (1 << 4),  // break
+    _U = (1 << 5),  // unused
+    _V = (1 << 6),  // overflow
+    _N = (1 << 7),  // negative
+} _cpu_flag;
 
 uint8_t OPF(adc), OPF(and), OPF(asl), OPF(bcc), OPF(bcs), OPF(beq), OPF(bit), OPF(bmi),
         OPF(bne), OPF(bpl), OPF(brk), OPF(bvc), OPF(bvs), OPF(clc), OPF(cld), OPF(cli),
@@ -42,6 +62,24 @@ uint8_t OPF(adc), OPF(and), OPF(asl), OPF(bcc), OPF(bcs), OPF(beq), OPF(bit), OP
 
 uint8_t AMF(acc), AMF(imp), AMF(imm), AMF(zpg), AMF(zpx), AMF(zpy), AMF(abs), AMF(abx),
         AMF(aby), AMF(idr), AMF(idx), AMF(idy), AMF(rel), AMF(___);
+
+void cpu_clock(_nes* nes);
+void cpu_reset(_nes* nes);
+void cpu_irq(_nes* nes);
+void cpu_nmi(_nes* nes);
+
+uint8_t cpu_read(_nes* nes, uint16_t addr);
+void cpu_write(_nes* nes, uint16_t addr, uint8_t data);
+
+uint8_t no_fetch(_nes* nes);
+uint8_t cpu_fetch(_nes* nes);
+void cpu_write_back(_nes* nes, uint8_t result);
+
+uint8_t get_flag(_nes* nes, _cpu_flag flag);
+void set_flag(_nes* nes, _cpu_flag flag, uint8_t set);
+
+void push(_nes* nes, uint8_t data);
+uint8_t pull(_nes* nes);
 
 static _instr instructions[256] = {
     IN(brk,imp,7,0), IN(ora,idx,6,1), ILLEGAL_INSTRUC, ILLEGAL_INSTRUC, ILLEGAL_INSTRUC, IN(ora,zpg,3,1), IN(asl,zpg,5,1), ILLEGAL_INSTRUC,     // 0x00 - 0x07
