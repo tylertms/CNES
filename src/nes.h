@@ -1,40 +1,27 @@
 #pragma once
 
+#include "cpu.h"
+#include "ppu.h"
+#include "apu.h"
+#include "cart.h"
+#include "input.h"
 #include <stdint.h>
 #include <stddef.h>
-
-typedef struct _cpu {
-    uint8_t a;              // accumulator
-    uint8_t x;              // x register
-    uint8_t y;              // y register
-    uint8_t p;              // status flags
-    uint8_t s;              // stack pointer
-    uint8_t pc;             // program counter
-    uint8_t ram[0x800];     // cpu ram
-    uint8_t cycles;         // instr cycle counter
-    uint8_t irq_pending;    // interrupt request
-    uint8_t nmi_pending;    // non-maskable interrupt
-} _cpu;
-
-typedef struct _ppu {
-
-} _ppu;
-
-typedef struct _apu {
-
-} _apu;
-
-typedef struct _cart {
-
-} _cart;
-
-typedef struct _input {
-
-} _input;
 
 typedef struct _nes {
     _cpu cpu;
     _ppu ppu;
     _apu apu;
     _cart cart;
+    _input input;
+
+    uint8_t ram[0x800];
+
+    uint32_t master_clock;
+    uint8_t cpu_div;
+    uint8_t frame_complete;
 } _nes;
+
+void nes_init(_nes* nes);
+void nes_reset(_nes* nes);
+void nes_clock(_nes* nes);
