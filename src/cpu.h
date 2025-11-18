@@ -7,16 +7,18 @@
 
 #define IN(opcode, mode, cycles, opcount) {#opcode, #mode, op_##opcode, am_##mode, cycles, opcount}
 #define ILLEGAL_INSTRUC IN(___, ___, 0, 0)
-#define OPF(opcode) op_##opcode(_nes* nes)
-#define AMF(mode) am_##mode(_nes* nes)
+#define OPF(opcode) op_##opcode(_cpu* cpu)
+#define AMF(mode) am_##mode(_cpu* cpu)
 
-typedef struct _nes _nes;
+typedef struct _cpu _cpu;
+typedef struct _ppu _ppu;
+typedef struct _cart _cart;
 
 typedef struct _instr {
     char opcode[4];             // name of opcode
     char mode[4];               // name of addressing mode
-    uint8_t (*ex_op)(_nes*);    // fn pointer to operation
-    uint8_t (*ex_am)(_nes*);    // fn pointer to addressing mode
+    uint8_t (*ex_op)(_cpu*);    // fn pointer to operation
+    uint8_t (*ex_am)(_cpu*);    // fn pointer to addressing mode
     uint8_t cycles;             // number of cpu cycles for execution
     uint8_t opcount;            // number of operands after opcode
 } _instr;
@@ -38,6 +40,9 @@ typedef struct _cpu {
     uint8_t irq_pending;    // interrupt request
     uint8_t nmi_pending;    // non-maskable interrupt
     uint8_t ram[0x800];     // cpu memory
+
+    _ppu* p_ppu;              // ref for ppu regs cpu-side
+    _cart* p_cart;            // ref for cart mapper cpu-side
 } _cpu;
 
 typedef enum _cpu_flag {
@@ -63,23 +68,23 @@ uint8_t OPF(adc), OPF(and), OPF(asl), OPF(bcc), OPF(bcs), OPF(beq), OPF(bit), OP
 uint8_t AMF(acc), AMF(imp), AMF(imm), AMF(zpg), AMF(zpx), AMF(zpy), AMF(abs), AMF(abx),
         AMF(aby), AMF(idr), AMF(idx), AMF(idy), AMF(rel), AMF(___);
 
-void cpu_clock(_nes* nes);
-void cpu_reset(_nes* nes);
-void cpu_irq(_nes* nes);
-void cpu_nmi(_nes* nes);
+void cpu_clock(_cpu* cpu);
+void cpu_reset(_cpu* cpu);
+void cpu_irq(_cpu* cpu);
+void cpu_nmi(_cpu* cpu);
 
-uint8_t cpu_read(_nes* nes, uint16_t addr);
-void cpu_write(_nes* nes, uint16_t addr, uint8_t data);
+uint8_t cpu_read(_cpu* cpu, uint16_t addr);
+void cpu_write(_cpu* cpu, uint16_t addr, uint8_t data);
 
-uint8_t no_fetch(_nes* nes);
-uint8_t cpu_fetch(_nes* nes);
-void cpu_write_back(_nes* nes, uint8_t result);
+uint8_t no_fetch(_cpu* cpu);
+uint8_t cpu_fetch(_cpu* cpu);
+void cpu_write_back(_cpu* cpu, uint8_t result);
 
-uint8_t get_flag(_nes* nes, _cpu_flag flag);
-void set_flag(_nes* nes, _cpu_flag flag, uint8_t set);
+uint8_t get_flag(_cpu* cpu, _cpu_flag flag);
+void set_flag(_cpu* cpu, _cpu_flag flag, uint8_t set);
 
-void push(_nes* nes, uint8_t data);
-uint8_t pull(_nes* nes);
+void push(_cpu* cpu, uint8_t data);
+uint8_t pull(_cpu* cpu);
 
 static _instr instructions[256] = {
     IN(brk,imp,7,0), IN(ora,idx,6,1), ILLEGAL_INSTRUC, ILLEGAL_INSTRUC, ILLEGAL_INSTRUC, IN(ora,zpg,3,1), IN(asl,zpg,5,1), ILLEGAL_INSTRUC,     // 0x00 - 0x07
