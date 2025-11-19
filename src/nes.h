@@ -14,7 +14,7 @@ typedef struct _nes {
     _cart cart;
     _input input;
 
-    uint32_t master_clock;
+    size_t master_clock;
     uint8_t cpu_div;
     uint8_t frame_complete;
 } _nes;

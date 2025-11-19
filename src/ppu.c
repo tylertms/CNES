@@ -13,7 +13,10 @@ void ppu_cpu_write(_ppu* ppu, uint16_t addr, uint8_t data) {
 }
 
 uint8_t ppu_read(_ppu* ppu, uint16_t addr) {
-    return 0x00;
+    uint8_t data = 0x00;
+    addr &= 0x3FFF;
+
+    return data;
 }
 
 void ppu_write(_ppu* ppu, uint16_t addr, uint8_t data) {

@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <stddef.h>
 
 #define NMI_VECTOR 0xFFFA
 #define RST_VECTOR 0xFFFC
@@ -40,7 +41,7 @@ typedef struct _cpu {
 
     uint8_t halt;           // halt execution
     uint8_t cycles;         // instr cycle counter
-    uint64_t total_cycles;  // total cycle counter
+    size_t total_cycles;  // total cycle counter
     uint8_t ram[0x800];     // cpu memory
 
     _ppu* p_ppu;              // ref for ppu regs cpu-side

@@ -2,7 +2,8 @@
 #include <stdint.h>
 
 typedef struct _ppu {
-
+    uint8_t nametable[0x800];
+    uint8_t palette_idx[0x20];
 } _ppu;
 
 void ppu_clock(_ppu* ppu);
