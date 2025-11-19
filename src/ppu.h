@@ -33,7 +33,7 @@ typedef enum _ppumask_flag {
     SPRITE_LC_EN    = (1 << 2),
     BGRND_EN        = (1 << 3),
     SPRITE_EN       = (1 << 4),
-    CUR_EM_R        = (1 << 5),
+    CLR_EM_R        = (1 << 5),
     CLR_EM_G        = (1 << 6),
     CLR_EM_B        = (1 << 7),
 } _ppumask_flag;
