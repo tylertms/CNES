@@ -1,9 +1,21 @@
 #pragma once
 #include <stdint.h>
+#include <stddef.h>
+
+typedef struct _mem {
+    uint8_t* data;
+    size_t size;
+    uint8_t writeable;
+} _mem;
 
 typedef struct _cart {
-    uint8_t* prg;
-    uint8_t* chr;
+    _mem prg_rom;
+    _mem prg_ram;
+    _mem prg_nvram;
+
+    _mem chr_rom;
+    _mem chr_ram;
+    _mem chr_nvram;
 
     uint16_t prg_rom_banks;
     uint16_t chr_rom_banks;

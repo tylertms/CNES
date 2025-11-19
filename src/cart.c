@@ -1,6 +1,7 @@
 #include "cart.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 uint8_t cart_load(_cart* cart, char* file) {
     FILE* rom = fopen(file, "rb");
@@ -30,6 +31,36 @@ uint8_t cart_load(_cart* cart, char* file) {
     uint8_t nes2 = (header[7] & 0x0C) == 0x08;
     if (nes2) parse_nes2(cart, header);
     else parse_ines(cart, header);
+
+    if (cart->trainer)
+        fseek(rom, 0x200, SEEK_CUR);
+
+    size_t prg_rom_size = cart->prg_rom_banks * 0x4000;
+    size_t chr_rom_size = cart->chr_rom_banks * 0x2000;
+
+    cart->prg_rom = (_mem){
+      .data = malloc(prg_rom_size),
+      .size = prg_rom_size,
+      .writeable = 0
+    };
+
+    cart->chr_rom = (_mem){
+      .data = malloc(chr_rom_size),
+      .size = chr_rom_size,
+      .writeable = 0
+    };
+
+    int prg_banks_read = fread(cart->prg_rom.data, 0x4000, cart->prg_rom_banks, rom);
+    if (prg_banks_read != cart->prg_rom_banks) {
+        fprintf(stderr, "ERROR: Failed to read program rom from .nes file!\n");
+        return 1;
+    }
+
+    int chr_banks_read = fread(cart->chr_rom.data, 0x2000, cart->chr_rom_banks, rom);
+    if (chr_banks_read != cart->chr_rom_banks) {
+        fprintf(stderr, "ERROR: Failed to read character rom from .nes file!\n");
+        return 1;
+    }
 
     return 0;
 }
