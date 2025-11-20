@@ -13,6 +13,7 @@ add_executable(cnes
     src/apu.c
     src/cart.c
     src/cpu.c
+    src/gui.c
     src/input.c
     src/main.c
     src/mapper.c
