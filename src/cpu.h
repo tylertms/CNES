@@ -16,6 +16,7 @@
 typedef struct _cpu _cpu;
 typedef struct _ppu _ppu;
 typedef struct _cart _cart;
+typedef struct _input _input;
 
 typedef struct _instr {
     uint8_t opcode[4];          // name of opcode
@@ -41,11 +42,12 @@ typedef struct _cpu {
 
     uint8_t halt;           // halt execution
     uint8_t cycles;         // instr cycle counter
-    size_t total_cycles;  // total cycle counter
+    size_t total_cycles;    // total cycle counter
     uint8_t ram[0x800];     // cpu memory
 
-    _ppu* p_ppu;              // ref for ppu regs cpu-side
-    _cart* p_cart;            // ref for cart mapper cpu-side
+    _ppu* p_ppu;            // ref for ppu regs cpu-side
+    _cart* p_cart;          // ref for cart mapper cpu-side
+    _input* p_input;        // ref for controller input
 } _cpu;
 
 typedef enum _cpu_flag {

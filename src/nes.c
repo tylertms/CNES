@@ -7,6 +7,7 @@ void nes_init(_nes* nes, _gui* gui) {
 
     nes->cpu.p_ppu = &nes->ppu;
     nes->cpu.p_cart = &nes->cart;
+    nes->cpu.p_input = &nes->input;
     nes->ppu.p_cart = &nes->cart;
     nes->ppu.p_gui = gui;
 }

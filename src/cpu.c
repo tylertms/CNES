@@ -1,5 +1,6 @@
 #include "cpu.h"
 #include "cart.h"
+#include "input.h"
 #include "ppu.h"
 #include <ctype.h>
 #include <string.h>
@@ -15,8 +16,8 @@ inline void cpu_clock(_cpu* cpu) {
     cpu->cycles = cpu->instr.cycles;
     uint8_t am_cycle = cpu->instr.ex_am(cpu);
 
-    //print_state(cpu);
-    //printf("\n");
+    // print_state(cpu);
+    // printf("\n");
 
     uint8_t op_cycle = cpu->instr.ex_op(cpu);
     cpu->cycles += (am_cycle & op_cycle);
@@ -85,8 +86,9 @@ uint8_t cpu_read(_cpu* cpu, uint16_t addr) {
             uint16_t reg_addr = 0x2000 | (addr & 0x0007);
             data = ppu_cpu_read(cpu->p_ppu, reg_addr);
         }
-    } else if (0x4000 <= addr && addr <= 0x4017) {
-        // TODO: APU
+    } else if (0x4016 <= addr && addr <= 0x4017) {
+        data = !!(cpu->p_input->input_state[addr & 0x0001] & 0x80);
+        cpu->p_input->input_state[addr & 0x0001] <<= 1;
     } else if (0x4020 <= addr && addr <= 0xFFFF) {
         if (cpu->p_cart) {
             data = cart_cpu_read(cpu->p_cart, addr);
@@ -104,8 +106,9 @@ void cpu_write(_cpu* cpu, uint16_t addr, uint8_t data) {
             uint16_t reg_addr = 0x2000 | (addr & 0x0007);
             ppu_cpu_write(cpu->p_ppu, reg_addr, data);
         }
-    } else if (0x4000 <= addr && addr <= 0x4017) {
-        // TODO: APU
+    } else if (0x4016 <= addr && addr <= 0x4017) {
+        uint8_t snapshot = cpu->p_input->controller[addr & 0x0001];
+        cpu->p_input->input_state[addr & 0x0001] = snapshot;
     } else if (0x4020 <= addr && addr <= 0xFFFF) {
         if (cpu->p_cart) {
             cart_cpu_write(cpu->p_cart, addr, data);
@@ -504,7 +507,7 @@ uint8_t op_pha(_cpu* cpu) {
 }
 
 uint8_t op_php(_cpu* cpu) {
-    push(cpu, cpu->p | BREAK);
+    push(cpu, cpu->p | BREAK | UNUSED);
 	return 0;
 }
 

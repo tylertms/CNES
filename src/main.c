@@ -36,18 +36,33 @@ int main(int argc, char** argv) {
     while (!nes.cpu.halt) {
         uint64_t frame_start = SDL_GetTicksNS();
 
-        nes_clock(&nes);
-
-        draw_gui(&gui);
+        nes.input.controller[0] = 0x00;
+        nes.input.controller[1] = 0x00;
 
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
             case SDL_EVENT_QUIT:
             case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
                 nes.cpu.halt = 1; break;
+            case SDL_EVENT_KEY_DOWN:
+                switch (event.key.scancode) {
+                    case SDL_SCANCODE_X:     nes.input.controller[0] |= 0x80; break;
+                    case SDL_SCANCODE_Z:     nes.input.controller[0] |= 0x40; break;
+                    case SDL_SCANCODE_A:     nes.input.controller[0] |= 0x20; break;
+                    case SDL_SCANCODE_S:     nes.input.controller[0] |= 0x10; break;
+                    case SDL_SCANCODE_UP:    nes.input.controller[0] |= 0x08; break;
+                    case SDL_SCANCODE_DOWN:  nes.input.controller[0] |= 0x04; break;
+                    case SDL_SCANCODE_LEFT:  nes.input.controller[0] |= 0x02; break;
+                    case SDL_SCANCODE_RIGHT: nes.input.controller[0] |= 0x01; break;
+                    default: break;
+                }
+
             default: break;
             }
         }
+
+        nes_clock(&nes);
+        draw_gui(&gui);
 
         uint64_t frame_end = SDL_GetTicksNS();
         uint64_t elapsed_ns = frame_end - frame_start;
