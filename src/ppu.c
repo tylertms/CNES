@@ -5,87 +5,7 @@
 #include "palette.h"
 #include <SDL3/SDL.h>
 
-void increment_scroll_x(_ppu* ppu) {
-    if (!(ppu->ppumask & (BGRND_EN | SPRITE_EN))) {
-        return;
-    }
-
-    if ((ppu->vram_addr & COARSE_X) == COARSE_X) {
-        ppu->vram_addr &= ~COARSE_X;
-        ppu->vram_addr ^= NTBL_X;
-    } else {
-        ppu->vram_addr += 0x0001;
-    }
-}
-
-void increment_scroll_y(_ppu* ppu) {
-    if (!(ppu->ppumask & (BGRND_EN | SPRITE_EN))) {
-        return;
-    }
-
-    if ((ppu->vram_addr & FINE_Y) != FINE_Y) {
-        ppu->vram_addr += 0x1000;
-        return;
-    }
-
-    ppu->vram_addr &= ~FINE_Y;
-
-    uint16_t y = (ppu->vram_addr & COARSE_Y) >> 5;
-    if (y == 29) {
-        ppu->vram_addr &= ~COARSE_Y;
-        ppu->vram_addr ^= NTBL_Y;
-    } else if (y == 31) {
-        ppu->vram_addr &= ~COARSE_Y;
-    } else {
-        ppu->vram_addr += 0x20;
-    }
-}
-
-void transfer_addr_x(_ppu* ppu) {
-    if (!(ppu->ppumask & (BGRND_EN | SPRITE_EN))) {
-        return;
-    }
-
-    uint16_t tmask = NTBL_X | COARSE_X;
-    ppu->vram_addr = (ppu->vram_addr & ~tmask) | (ppu->tram_addr & tmask);
-}
-
-void transfer_addr_y(_ppu* ppu) {
-    if (!(ppu->ppumask & (BGRND_EN | SPRITE_EN))) {
-        return;
-    }
-
-    uint16_t tmask = FINE_Y | NTBL_Y | COARSE_Y;
-    ppu->vram_addr = (ppu->vram_addr & ~tmask) | (ppu->tram_addr & tmask);
-}
-
-void load_bgrnd_shifters(_ppu* ppu) {
-    ppu->bgrnd_pattern_low = (ppu->bgrnd_pattern_low & 0xFF00) | ppu->bgrnd_next_low;
-    ppu->bgrnd_pattern_high = (ppu->bgrnd_pattern_high & 0xFF00) | ppu->bgrnd_next_high;
-
-    uint8_t next_attr_low = ppu->bgrnd_next_attr & 0x01 ? 0xFF : 0x00;
-    uint8_t next_attr_high = ppu->bgrnd_next_attr & 0x02 ? 0xFF : 0x00;
-
-    ppu->bgrnd_attr_low = (ppu->bgrnd_attr_low & 0xFF00) | next_attr_low;
-    ppu->bgrnd_attr_high = (ppu->bgrnd_attr_high & 0xFF00) | next_attr_high;
-}
-
-void update_shifters(_ppu* ppu) {
-    if (!(ppu->ppumask & BGRND_EN)) {
-        return;
-    }
-
-    ppu->bgrnd_pattern_low <<= 1;
-    ppu->bgrnd_pattern_high <<= 1;
-    ppu->bgrnd_attr_low <<= 1;
-    ppu->bgrnd_attr_high <<= 1;
-}
-
-uint32_t get_color(_ppu* ppu, uint8_t palette, uint8_t emphasis, uint8_t pixel) {
-    return nes_pal[emphasis & 0x07][ppu_read(ppu, 0x3F00 + (palette << 2) + pixel) & 0x3F];
-}
-
-inline uint8_t ppu_clock(_ppu* ppu) {
+uint8_t ppu_clock(_ppu* ppu) {
     if (ppu->scanline == NES_ALL_HMAX || ppu->scanline < NES_H) {
         if (ppu->scanline == 0 && ppu->cycle == 0) {
             uint8_t skip = ppu->even_frame && (ppu->ppumask & (BGRND_EN | SPRITE_EN));
@@ -274,8 +194,8 @@ uint8_t ppustatus_cpu_read(_ppu* ppu) {
 }
 
 uint8_t oamdata_cpu_read(_ppu* ppu) {
-    uint8_t data = 0x00;
-    return 0x00;
+    uint8_t data = ((uint8_t*)ppu->oam)[ppu->oamaddr];
+    return data;
 }
 
 uint8_t ppudata_cpu_read(_ppu* ppu) {
@@ -303,11 +223,11 @@ void ppumask_cpu_write(_ppu* ppu, uint8_t data) {
 }
 
 void oamaddr_cpu_write(_ppu* ppu, uint8_t data) {
-
+    ppu->oamaddr = data;
 }
 
 void oamdata_cpu_write(_ppu* ppu, uint8_t data) {
-
+    ((uint8_t*)ppu->oam)[ppu->oamaddr] = data;
 }
 
 void ppuscroll_cpu_write(_ppu* ppu, uint8_t data) {
@@ -352,4 +272,84 @@ uint8_t physical_nametable(_cart* cart, uint8_t logical) {
     } else {
         return (logical & 0x01) ? 1 : 0;
     }
+}
+
+void increment_scroll_x(_ppu* ppu) {
+    if (!(ppu->ppumask & (BGRND_EN | SPRITE_EN))) {
+        return;
+    }
+
+    if ((ppu->vram_addr & COARSE_X) == COARSE_X) {
+        ppu->vram_addr &= ~COARSE_X;
+        ppu->vram_addr ^= NTBL_X;
+    } else {
+        ppu->vram_addr += 0x0001;
+    }
+}
+
+void increment_scroll_y(_ppu* ppu) {
+    if (!(ppu->ppumask & (BGRND_EN | SPRITE_EN))) {
+        return;
+    }
+
+    if ((ppu->vram_addr & FINE_Y) != FINE_Y) {
+        ppu->vram_addr += 0x1000;
+        return;
+    }
+
+    ppu->vram_addr &= ~FINE_Y;
+
+    uint16_t y = (ppu->vram_addr & COARSE_Y) >> 5;
+    if (y == 29) {
+        ppu->vram_addr &= ~COARSE_Y;
+        ppu->vram_addr ^= NTBL_Y;
+    } else if (y == 31) {
+        ppu->vram_addr &= ~COARSE_Y;
+    } else {
+        ppu->vram_addr += 0x20;
+    }
+}
+
+void transfer_addr_x(_ppu* ppu) {
+    if (!(ppu->ppumask & (BGRND_EN | SPRITE_EN))) {
+        return;
+    }
+
+    uint16_t tmask = NTBL_X | COARSE_X;
+    ppu->vram_addr = (ppu->vram_addr & ~tmask) | (ppu->tram_addr & tmask);
+}
+
+void transfer_addr_y(_ppu* ppu) {
+    if (!(ppu->ppumask & (BGRND_EN | SPRITE_EN))) {
+        return;
+    }
+
+    uint16_t tmask = FINE_Y | NTBL_Y | COARSE_Y;
+    ppu->vram_addr = (ppu->vram_addr & ~tmask) | (ppu->tram_addr & tmask);
+}
+
+void load_bgrnd_shifters(_ppu* ppu) {
+    ppu->bgrnd_pattern_low = (ppu->bgrnd_pattern_low & 0xFF00) | ppu->bgrnd_next_low;
+    ppu->bgrnd_pattern_high = (ppu->bgrnd_pattern_high & 0xFF00) | ppu->bgrnd_next_high;
+
+    uint8_t next_attr_low = ppu->bgrnd_next_attr & 0x01 ? 0xFF : 0x00;
+    uint8_t next_attr_high = ppu->bgrnd_next_attr & 0x02 ? 0xFF : 0x00;
+
+    ppu->bgrnd_attr_low = (ppu->bgrnd_attr_low & 0xFF00) | next_attr_low;
+    ppu->bgrnd_attr_high = (ppu->bgrnd_attr_high & 0xFF00) | next_attr_high;
+}
+
+void update_shifters(_ppu* ppu) {
+    if (!(ppu->ppumask & BGRND_EN)) {
+        return;
+    }
+
+    ppu->bgrnd_pattern_low <<= 1;
+    ppu->bgrnd_pattern_high <<= 1;
+    ppu->bgrnd_attr_low <<= 1;
+    ppu->bgrnd_attr_high <<= 1;
+}
+
+uint32_t get_color(_ppu* ppu, uint8_t palette, uint8_t emphasis, uint8_t pixel) {
+    return nes_pal[emphasis & 0x07][ppu_read(ppu, 0x3F00 + (palette << 2) + pixel) & 0x3F];
 }

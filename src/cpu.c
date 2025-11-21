@@ -2,13 +2,14 @@
 #include "cpu.h"
 #include "cart.h"
 #include "input.h"
+#include "nes.h"
 #include "ppu.h"
 #include <ctype.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-inline void cpu_clock(_cpu* cpu) {
+void cpu_clock(_cpu* cpu) {
     cpu->total_cycles++;
     if (--cpu->cycles) return;
 
@@ -123,6 +124,10 @@ void cpu_write(_cpu* cpu, uint16_t addr, uint8_t data) {
             uint16_t reg_addr = 0x2000 | (addr & 0x0007);
             ppu_cpu_write(cpu->p_ppu, reg_addr, data);
         }
+    } else if (addr == 0x4014) {
+        cpu->p_dma->data = data;
+        cpu->p_dma->addr = 0x00;
+        cpu->p_dma->is_tranfer = 1;
     } else if (0x4016 <= addr && addr <= 0x4017) {
         uint8_t snapshot = cpu->p_input->controller[addr & 0x0001];
         cpu->p_input->input_state[addr & 0x0001] = snapshot;
@@ -131,48 +136,6 @@ void cpu_write(_cpu* cpu, uint16_t addr, uint8_t data) {
             cart_cpu_write(cpu->p_cart, addr, data);
         }
     }
-}
-
-uint8_t no_fetch(_cpu* cpu) {
-    return cpu->instr.mode_num == _imp ||
-        cpu->instr.mode_num == _acc;
-}
-
-uint8_t cpu_fetch(_cpu* cpu) {
-    if (no_fetch(cpu)) return cpu->op_data;
-    return cpu_read(cpu, cpu->op_addr);
-}
-
-void cpu_write_back(_cpu* cpu, uint8_t result) {
-    if (no_fetch(cpu)) cpu->a = result & 0xFF;
-    else cpu_write(cpu, cpu->op_addr, result & 0xFF);
-}
-
-uint8_t get_flag(_cpu* cpu, _cpu_flag flag) {
-    return !!(cpu->p & flag);
-}
-
-void set_flag(_cpu* cpu, _cpu_flag flag, uint8_t set) {
-    if (set) cpu->p |= flag;
-    else cpu->p &= ~flag;
-}
-
-void push(_cpu* cpu, uint8_t data) {
-    cpu_write(cpu, 0x0100 + cpu->s--, data);
-}
-
-uint8_t pull(_cpu* cpu) {
-    return cpu_read(cpu, 0x0100 + ++cpu->s);
-}
-
-void branch(_cpu* cpu) {
-    cpu->cycles++;
-    uint16_t res = cpu->op_addr + cpu->pc;
-
-    if ((res & 0xFF00) != (cpu->pc & 0xFF00))
-        cpu->cycles++;
-
-    cpu->pc = res;
 }
 
 /* address modes */

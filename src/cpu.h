@@ -13,6 +13,7 @@
 typedef struct _cpu _cpu;
 typedef struct _ppu _ppu;
 typedef struct _cart _cart;
+typedef struct _dma _dma;
 typedef struct _input _input;
 
 typedef struct _instr {
@@ -49,6 +50,7 @@ typedef struct _cpu {
     _ppu* p_ppu;            // ref for ppu regs cpu-side
     _cart* p_cart;          // ref for cart mapper cpu-side
     _input* p_input;        // ref for controller input
+    _dma* p_dma;            // ref for dma to ppu
 } _cpu;
 
 typedef enum _cpu_flag {
@@ -90,17 +92,48 @@ void cpu_nmi(_cpu* cpu, uint8_t brk);
 uint8_t cpu_read(_cpu* cpu, uint16_t addr);
 void cpu_write(_cpu* cpu, uint16_t addr, uint8_t data);
 
-uint8_t no_fetch(_cpu* cpu);
-uint8_t cpu_fetch(_cpu* cpu);
-void cpu_write_back(_cpu* cpu, uint8_t result);
-
-uint8_t get_flag(_cpu* cpu, _cpu_flag flag);
-void set_flag(_cpu* cpu, _cpu_flag flag, uint8_t set);
-
-void push(_cpu* cpu, uint8_t data);
-uint8_t pull(_cpu* cpu);
-
 void print_state(_cpu* cpu);
+
+inline uint8_t no_fetch(_cpu* cpu) {
+    return cpu->instr.mode_num == _imp || cpu->instr.mode_num == _acc;
+}
+
+inline uint8_t cpu_fetch(_cpu* cpu) {
+    if (no_fetch(cpu)) return cpu->op_data;
+    return cpu_read(cpu, cpu->op_addr);
+}
+
+inline void cpu_write_back(_cpu* cpu, uint8_t result) {
+    if (no_fetch(cpu)) cpu->a = result & 0xFF;
+    else cpu_write(cpu, cpu->op_addr, result & 0xFF);
+}
+
+inline uint8_t get_flag(_cpu* cpu, _cpu_flag flag) {
+    return !!(cpu->p & flag);
+}
+
+inline void set_flag(_cpu* cpu, _cpu_flag flag, uint8_t set) {
+    if (set) cpu->p |= flag;
+    else cpu->p &= ~flag;
+}
+
+inline void push(_cpu* cpu, uint8_t data) {
+    cpu_write(cpu, 0x0100 + cpu->s--, data);
+}
+
+inline uint8_t pull(_cpu* cpu) {
+    return cpu_read(cpu, 0x0100 + ++cpu->s);
+}
+
+inline void branch(_cpu* cpu) {
+    cpu->cycles++;
+    uint16_t res = cpu->op_addr + cpu->pc;
+
+    if ((res & 0xFF00) != (cpu->pc & 0xFF00))
+        cpu->cycles++;
+
+    cpu->pc = res;
+}
 
 static _instr instructions[256] = {
     IN(brk,imp,7,0), IN(ora,idx,6,1), IN(hlt,imp,0,0), IN(slo,idx,8,1), IN(nop,zpg,3,1), IN(ora,zpg,3,1), IN(asl,zpg,5,1), IN(slo,zpg,5,1),     // 0x00 - 0x07

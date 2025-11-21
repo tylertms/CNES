@@ -11,9 +11,17 @@ typedef struct _cpu _cpu;
 typedef struct _cart _cart;
 typedef struct _gui _gui;
 
+typedef struct _sprite {
+    uint8_t pos_y;
+    uint8_t id;
+    uint8_t attr;
+    uint8_t pos_x;
+} _sprite;
+
 typedef struct _ppu {
     uint8_t nametable[0x800];
     uint8_t palette_idx[0x20];
+    _sprite oam[0x40];
 
     uint8_t ppuctrl;
     uint8_t ppumask;
@@ -117,5 +125,13 @@ void ppuscroll_cpu_write(_ppu* ppu, uint8_t data);
 void ppuaddr_cpu_write(_ppu* ppu, uint8_t data);
 void ppudata_cpu_write(_ppu* ppu, uint8_t data);
 void oamdma_cpu_write(_ppu* ppu, uint8_t data);
+
+void increment_scroll_x(_ppu* ppu);
+void increment_scroll_y(_ppu* ppu);
+void transfer_addr_x(_ppu* ppu);
+void transfer_addr_y(_ppu* ppu);
+void load_bgrnd_shifters(_ppu* ppu);
+void update_shifters(_ppu* ppu);
+uint32_t get_color(_ppu* ppu, uint8_t palette, uint8_t emphasis, uint8_t pixel);
 
 uint8_t physical_nametable(_cart* cart, uint8_t logical);
