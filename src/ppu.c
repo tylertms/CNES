@@ -3,7 +3,6 @@
 #include "cart.h"
 #include "gui.h"
 #include "palette.h"
-#include <SDL3/SDL.h>
 
 uint8_t ppu_clock(_ppu* ppu) {
     if (ppu->scanline == NES_ALL_HMAX || ppu->scanline < NES_H) {
@@ -36,7 +35,6 @@ uint8_t ppu_clock(_ppu* ppu) {
                 ppu->bgrnd_next_attr = ppu_read(ppu, 0x23C0 | (ppu->vram_addr & (NTBL_Y | NTBL_X))
                                                             | ((ppu->vram_addr >> 4) & 0x38)
                                                             | ((ppu->vram_addr >> 2) & 0x07));
-
                 if (ppu->vram_addr & 0x0040)
                     ppu->bgrnd_next_attr >>= 4;
                 if (ppu->vram_addr & 0x0002)
@@ -75,85 +73,91 @@ uint8_t ppu_clock(_ppu* ppu) {
 
 
         // TODO: use proper cycles to perform these operations
-        if (ppu->cycle == 257 && ppu->scanline < NES_H) {
+        if (ppu->cycle == 257) {
             memset(ppu->sprites, 0xFF, 0x08 * sizeof(_sprite));
             ppu->sprite_count = 0;
-
-            uint8_t oam_entry = 0;
             ppu->sprite_0_hit_possible = 0;
-            while (oam_entry < 64 && ppu->sprite_count < 9) {
-                int16_t offset = (int16_t)ppu->scanline - (int16_t)ppu->oam[oam_entry].pos_y;
-                int16_t max_offset = ppu->ppuctrl & SPRITE_HEIGHT ? 16 : 8;
 
-                if (offset >= 0 && offset < max_offset) {
-                    if (ppu->sprite_count < 8) {
-                        if (!oam_entry) ppu->sprite_0_hit_possible = 1;
-                        ppu->sprites[ppu->sprite_count++] = ppu->oam[oam_entry];
-                    } else {
-                        ppu->ppustatus |= SPRITE_OVERFLOW;
+            uint16_t next_scanline = (ppu->scanline + 1) % (NES_ALL_HMAX + 1);
+
+            if (next_scanline < NES_H) {
+                uint8_t oam_entry = 0;
+                while (oam_entry < 64 && ppu->sprite_count < 9) {
+                    int16_t offset = (int16_t)ppu->scanline - (int16_t)ppu->oam[oam_entry].pos_y;
+                    int16_t max_offset = ppu->ppuctrl & SPRITE_HEIGHT ? 16 : 8;
+
+                    if (offset >= 0 && offset < max_offset) {
+                        if (ppu->sprite_count < 8) {
+                            if (!oam_entry) ppu->sprite_0_hit_possible = 1;
+                            ppu->sprites[ppu->sprite_count++] = ppu->oam[oam_entry];
+                        } else {
+                            ppu->ppustatus |= SPRITE_OVERFLOW;
+                        }
                     }
-                }
 
-                oam_entry++;
+                    oam_entry++;
+                }
             }
         }
 
         if (ppu->cycle == NES_ALL_WMAX) {
-            for (uint8_t i = 0; i < ppu->sprite_count; i++) {
-                uint8_t sprite_pattern_bits_low;
-                uint8_t sprite_pattern_bits_high;
-                uint16_t sprite_pattern_addr_low;
-                uint16_t sprite_pattern_addr_high;
+            uint16_t next_scanline = (ppu->scanline + 1) % (NES_ALL_HMAX + 1);
 
-                if (ppu->ppuctrl & SPRITE_HEIGHT) {
-                    if (ppu->sprites[i].attr & FLIP_VERTICAL) {
-                        if (ppu->scanline - ppu->sprites[i].pos_y < 8) {
-                            sprite_pattern_addr_low = ((ppu->sprites[i].id & 0x01) << 12) |
-                                (((ppu->sprites[i].id & 0xFE) + 1) << 4) |
-                                (7 - (ppu->scanline - ppu->sprites[i].pos_y) & 0x07);
+            if (next_scanline < NES_H) {
+                for (uint8_t i = 0; i < ppu->sprite_count; i++) {
+                    uint8_t sprite_pattern_bits_low;
+                    uint8_t sprite_pattern_bits_high;
+                    uint16_t sprite_pattern_addr_low;
+                    uint16_t sprite_pattern_addr_high;
+
+                    if (ppu->ppuctrl & SPRITE_HEIGHT) {
+                        if (ppu->sprites[i].attr & FLIP_VERTICAL) {
+                            if (ppu->scanline - ppu->sprites[i].pos_y < 8) {
+                                sprite_pattern_addr_low = ((ppu->sprites[i].id & 0x01) << 12) |
+                                    (((ppu->sprites[i].id & 0xFE) + 1) << 4) |
+                                    (7 - (ppu->scanline - ppu->sprites[i].pos_y) & 0x07);
+                            } else {
+                                sprite_pattern_addr_low = ((ppu->sprites[i].id & 0x01) << 12) |
+                                    ((ppu->sprites[i].id & 0xFE) << 4) |
+                                    (7 - (ppu->scanline - ppu->sprites[i].pos_y) & 0x07);
+                            }
                         } else {
-                            sprite_pattern_addr_low = ((ppu->sprites[i].id & 0x01) << 12) |
-                                ((ppu->sprites[i].id & 0xFE) << 4) |
-                                (7 - (ppu->scanline - ppu->sprites[i].pos_y) & 0x07);
+                            if (ppu->scanline - ppu->sprites[i].pos_y < 8) {
+                                sprite_pattern_addr_low = ((ppu->sprites[i].id & 0x01) << 12) |
+                                    ((ppu->sprites[i].id & 0xFE) << 4) |
+                                    ((ppu->scanline - ppu->sprites[i].pos_y) & 0x07);
+                            } else {
+                                sprite_pattern_addr_low = ((ppu->sprites[i].id & 0x01) << 12) |
+                                    (((ppu->sprites[i].id & 0xFE) + 1) << 4) |
+                                    ((ppu->scanline - ppu->sprites[i].pos_y) & 0x07);
+                            }
                         }
                     } else {
-                        if (ppu->scanline - ppu->sprites[i].pos_y < 8) {
-                            sprite_pattern_addr_low = ((ppu->sprites[i].id & 0x01) << 12) |
-                                ((ppu->sprites[i].id & 0xFE) << 4) |
-                                ((ppu->scanline - ppu->sprites[i].pos_y) & 0x07);
+                        if (ppu->sprites[i].attr & FLIP_VERTICAL) {
+                            sprite_pattern_addr_low = ((ppu->ppuctrl & SPRITE_SEL) << 12) |
+                                (ppu->sprites[i].id << 4) |
+                                (7 - (ppu->scanline - ppu->sprites[i].pos_y));
                         } else {
-                            sprite_pattern_addr_low = ((ppu->sprites[i].id & 0x01) << 12) |
-                                (((ppu->sprites[i].id & 0xFE) + 1) << 4) |
-                                ((ppu->scanline - ppu->sprites[i].pos_y) & 0x07);
+                            sprite_pattern_addr_low = ((ppu->ppuctrl & SPRITE_SEL) << 12) |
+                                (ppu->sprites[i].id << 4) |
+                                (ppu->scanline - ppu->sprites[i].pos_y);
                         }
                     }
-                } else {
-                    if (ppu->sprites[i].attr & FLIP_VERTICAL) {
-                        sprite_pattern_addr_low = ((ppu->ppuctrl & SPRITE_SEL) << 12) |
-                            (ppu->sprites[i].id << 4) |
-                            (7 - (ppu->scanline - ppu->sprites[i].pos_y));
-                    } else {
-                        sprite_pattern_addr_low = ((ppu->ppuctrl & SPRITE_SEL) << 12) |
-                            (ppu->sprites[i].id << 4) |
-                            (ppu->scanline - ppu->sprites[i].pos_y);
+
+                    sprite_pattern_addr_high = sprite_pattern_addr_low + 8;
+
+                    sprite_pattern_bits_low = ppu_read(ppu, sprite_pattern_addr_low);
+                    sprite_pattern_bits_high = ppu_read(ppu, sprite_pattern_addr_high);
+
+                    if (ppu->sprites[i].attr & FLIP_HORIZONTAL) {
+                        sprite_pattern_bits_low = reverse_byte(sprite_pattern_bits_low);
+                        sprite_pattern_bits_high = reverse_byte(sprite_pattern_bits_high);
                     }
+
+                    ppu->sprite_pattern_low[i] = sprite_pattern_bits_low;
+    				ppu->sprite_pattern_high[i] = sprite_pattern_bits_high;
                 }
-
-                sprite_pattern_addr_high = sprite_pattern_addr_low + 8;
-
-                sprite_pattern_bits_low = ppu_read(ppu, sprite_pattern_addr_low);
-                sprite_pattern_bits_high = ppu_read(ppu, sprite_pattern_addr_high);
-
-                if (ppu->sprites[i].attr & FLIP_HORIZONTAL) {
-                    sprite_pattern_bits_low = reverse_byte(sprite_pattern_bits_low);
-                    sprite_pattern_bits_high = reverse_byte(sprite_pattern_bits_high);
-                }
-
-                ppu->sprite_pattern_low[i] = sprite_pattern_bits_low;
-				ppu->sprite_pattern_high[i] = sprite_pattern_bits_high;
             }
-
-
         }
 
         if (ppu->scanline == NES_ALL_HMAX && ppu->cycle == 1) {
