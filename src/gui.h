@@ -8,7 +8,7 @@ typedef struct _gui {
     uint32_t* pixels;
 } _gui;
 
-int init_gui(_gui* gui);
+int gui_init(_gui* gui);
 void set_pixel(_gui* gui, uint16_t x, uint16_t y, uint32_t color);
-void draw_gui(_gui* gui);
-void deinit_gui(_gui *gui);
+void gui_draw(_gui* gui);
+void gui_deinit(_gui *gui);

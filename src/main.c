@@ -10,15 +10,19 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
+        printf("Failed to init SDL audio: %s\n", SDL_GetError());
+    }
+
     _gui gui;
-    if (init_gui(&gui)) {
-        deinit_gui(&gui);
+    if (gui_init(&gui)) {
+        gui_deinit(&gui);
         return 1;
     }
 
     _nes nes;
     if (nes_init(&nes, argv[1], &gui)) {
-        deinit_gui(&gui);
+        gui_deinit(&gui);
         return 1;
     }
 
@@ -51,7 +55,7 @@ int main(int argc, char** argv) {
                         break;
                     case SDL_SCANCODE_DELETE:
                         if (nes_init(&nes, argv[1], &gui)) {
-                            deinit_gui(&gui);
+                            gui_deinit(&gui);
                             return 1;
                         };
                         break;
@@ -94,9 +98,11 @@ int main(int argc, char** argv) {
             did_step = 1;
         }
 
-        draw_gui(&gui);
+        gui_draw(&gui);
     }
 
-    deinit_gui(&gui);
+    nes_deinit(&nes);
+    gui_deinit(&gui);
+
     return 0;
 }

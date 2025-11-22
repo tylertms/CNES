@@ -36,4 +36,4 @@ target_link_options(cnes PRIVATE
     $<$<CONFIG:Debug>:-fsanitize=address>
 )
 
-target_link_libraries(cnes PRIVATE SDL3::SDL3)
+target_link_libraries(cnes PRIVATE SDL3::SDL3 m)

@@ -4,8 +4,6 @@
 #include "cpu.h"
 #include "input.h"
 #include "ppu.h"
-#include <stdint.h>
-#include <stddef.h>
 
 typedef struct _nes {
     _cpu cpu;
@@ -18,5 +16,6 @@ typedef struct _nes {
 } _nes;
 
 uint8_t nes_init(_nes* nes, char* file, _gui* gui);
+void nes_deinit(_nes* nes);
 void nes_reset(_nes* nes);
 void nes_clock(_nes* nes);

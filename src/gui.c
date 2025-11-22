@@ -1,7 +1,7 @@
 #include "gui.h"
 #include "ppu.h"
 
-int init_gui(_gui* gui) {
+int gui_init(_gui* gui) {
     const int width = 512;
     const int height = 480;
 
@@ -57,7 +57,7 @@ void set_pixel(_gui* gui, uint16_t x, uint16_t y, uint32_t color) {
     }
 }
 
-void draw_gui(_gui* gui) {
+void gui_draw(_gui* gui) {
     SDL_UpdateTexture(
         gui->texture,
         NULL,
@@ -76,7 +76,7 @@ void draw_gui(_gui* gui) {
     SDL_RenderPresent(gui->renderer);
 }
 
-void deinit_gui(_gui *gui) {
+void gui_deinit(_gui *gui) {
     if (!gui) return;
 
     if (gui->pixels) {
