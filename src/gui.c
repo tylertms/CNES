@@ -10,7 +10,7 @@ int init_gui(_gui* gui) {
         return 1;
     }
 
-    gui->window = SDL_CreateWindow("cnes", width, height, 0);
+    gui->window = SDL_CreateWindow("cnes", width, height, SDL_WINDOW_RESIZABLE);
     if (!gui->window) {
         SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
         return 1;
@@ -21,6 +21,8 @@ int init_gui(_gui* gui) {
         SDL_Log("SDL_CreateRenderer failed: %s", SDL_GetError());
         return 1;
     }
+
+    SDL_SetRenderVSync(gui->renderer, 1);
 
     gui->texture = SDL_CreateTexture(
         gui->renderer,
