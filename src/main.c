@@ -54,6 +54,7 @@ int main(int argc, char** argv) {
 
             case SDL_EVENT_KEY_DOWN:
                 switch (event.key.scancode) {
+                    case SDL_SCANCODE_BACKSPACE:             nes_reset(&nes); break;
                     case SDL_SCANCODE_X:     nes.input.controller[0] |= 0x80; break;
                     case SDL_SCANCODE_Z:     nes.input.controller[0] |= 0x40; break;
                     case SDL_SCANCODE_A:     nes.input.controller[0] |= 0x20; break;
