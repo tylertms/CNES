@@ -2,7 +2,6 @@
 #include "cpu.h"
 #include "cart.h"
 #include "input.h"
-#include "nes.h"
 #include "ppu.h"
 #include <ctype.h>
 #include <string.h>
@@ -105,8 +104,13 @@ uint8_t cpu_read(_cpu* cpu, uint16_t addr) {
             data = ppu_cpu_read(cpu->p_ppu, reg_addr);
         }
     } else if (0x4016 <= addr && addr <= 0x4017) {
-        data = !!(cpu->p_input->input_state[addr & 0x0001] & 0x80);
-        cpu->p_input->input_state[addr & 0x0001] <<= 1;
+        uint8_t pad = addr & 0x0001;
+        if (cpu->p_input->strobe) {
+            data = (cpu->p_input->controller[pad] & 0x80) ? 1 : 0;
+        } else {
+            data = (cpu->p_input->shift[pad] & 0x80) ? 1 : 0;
+            cpu->p_input->shift[pad] <<= 1;
+        }
     } else if (0x4020 <= addr && addr <= 0xFFFF) {
         if (cpu->p_cart) {
             data = cart_cpu_read(cpu->p_cart, addr);
@@ -125,12 +129,14 @@ void cpu_write(_cpu* cpu, uint16_t addr, uint8_t data) {
             ppu_cpu_write(cpu->p_ppu, reg_addr, data);
         }
     } else if (addr == 0x4014) {
-        cpu->p_dma->data = data;
-        cpu->p_dma->addr = 0x00;
-        cpu->p_dma->is_tranfer = 1;
-    } else if (0x4016 <= addr && addr <= 0x4017) {
-        uint8_t snapshot = cpu->p_input->controller[addr & 0x0001];
-        cpu->p_input->input_state[addr & 0x0001] = snapshot;
+        oamdma_cpu_write(cpu->p_ppu, data);
+    } else if (addr == 0x4016) {
+        uint8_t new_strobe = data & 0x01;
+        if (cpu->p_input->strobe && !new_strobe) {
+            cpu->p_input->shift[0] = cpu->p_input->controller[0];
+            cpu->p_input->shift[1] = cpu->p_input->controller[1];
+        }
+        cpu->p_input->strobe = new_strobe;
     } else if (0x4020 <= addr && addr <= 0xFFFF) {
         if (cpu->p_cart) {
             cart_cpu_write(cpu->p_cart, addr, data);
@@ -596,7 +602,7 @@ uint8_t op_lxa(_cpu* cpu) {
 }
 
 uint8_t op_nop(_cpu* cpu) {
-	return 0;
+	return 1;
 }
 
 uint8_t op_ora(_cpu* cpu) {
@@ -855,7 +861,51 @@ uint8_t op_xaa(_cpu* cpu) {
     return 0;
 }
 
+/* Utilities */
 
+uint8_t no_fetch(_cpu* cpu) {
+    return cpu->instr.mode_num == _imp || cpu->instr.mode_num == _acc;
+}
+
+uint8_t cpu_fetch(_cpu* cpu) {
+    if (no_fetch(cpu)) return cpu->op_data;
+    return cpu_read(cpu, cpu->op_addr);
+}
+
+void cpu_write_back(_cpu* cpu, uint8_t result) {
+    if (no_fetch(cpu)) cpu->a = result & 0xFF;
+    else cpu_write(cpu, cpu->op_addr, result & 0xFF);
+}
+
+uint8_t get_flag(_cpu* cpu, _cpu_flag flag) {
+    return !!(cpu->p & flag);
+}
+
+void set_flag(_cpu* cpu, _cpu_flag flag, uint8_t set) {
+    if (set) cpu->p |= flag;
+    else cpu->p &= ~flag;
+}
+
+void push(_cpu* cpu, uint8_t data) {
+    cpu_write(cpu, 0x0100 + cpu->s--, data);
+}
+
+uint8_t pull(_cpu* cpu) {
+    return cpu_read(cpu, 0x0100 + ++cpu->s);
+}
+
+void branch(_cpu* cpu) {
+    cpu->cycles++;
+    uint16_t res = cpu->op_addr + cpu->pc;
+
+    if ((res & 0xFF00) != (cpu->pc & 0xFF00))
+        cpu->cycles++;
+
+    cpu->pc = res;
+}
+
+
+/* Logging */
 
 uint8_t* up_mnem(uint8_t* str) {
     unsigned long len = strlen((const char*)str);
