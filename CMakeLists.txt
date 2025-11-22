@@ -21,4 +21,11 @@ add_executable(cnes
     src/ppu.c
 )
 
+set_property(TARGET cnes PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+set(CMAKE_OPTIMIZE_DEPENDENCIES TRUE)
+target_compile_options(cnes PRIVATE
+    "$<$<CONFIG:Release>:-Ofast>"
+    "$<$<CONFIG:Release>:-march=native>"
+)
+
 target_link_libraries(cnes PRIVATE SDL3::SDL3)
