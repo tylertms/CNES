@@ -1,4 +1,5 @@
 #include "apu.h"
+#include <SDL3/SDL_hints.h>
 #include <stdio.h>
 #include <math.h>
 
@@ -9,12 +10,15 @@ void apu_init(_apu* apu) {
     spec.format = SDL_AUDIO_F32;
     spec.freq = SAMPLE_RATE;
 
+    SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "512");
+
     apu->audio_stream = SDL_OpenAudioDeviceStream(
         SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
         &spec,
         apu_callback,
         apu
     );
+
 
     if (!apu->audio_stream) {
         printf("Failed to open audio stream: %s\n", SDL_GetError());
@@ -51,4 +55,20 @@ void apu_callback(void *userdata, SDL_AudioStream *astream, int additional_amoun
     ((_apu*)userdata)->sine_sample_index = sine_sample_index;
 
     SDL_PutAudioStreamData(astream, tmp, samples * sizeof(float));
+}
+
+void apu_clock(_apu* apu) {
+
+}
+
+void apu_reset(_apu* apu) {
+
+}
+
+uint8_t apu_cpu_read(_apu* apu, uint16_t addr) {
+
+}
+
+void apu_cpu_write(_apu* apu, uint16_t addr, uint8_t data) {
+
 }
