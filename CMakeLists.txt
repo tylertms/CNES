@@ -9,6 +9,8 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(SDL3)
 
+file(GLOB MAPPERS "${CMAKE_CURRENT_SOURCE_DIR}/src/mapper/*.c")
+
 add_executable(cnes
     src/apu.c
     src/cart.c
@@ -16,25 +18,30 @@ add_executable(cnes
     src/gui.c
     src/input.c
     src/main.c
-    src/mapper.c
     src/nes.c
     src/ppu.c
+    ${MAPPERS}
 )
 
-set_property(TARGET cnes PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
-set(CMAKE_OPTIMIZE_DEPENDENCIES TRUE)
+set_property(TARGET cnes PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+set(CMAKE_OPTIMIZE_DEPENDENCIES_RELEASE TRUE)
+
 target_compile_options(cnes PRIVATE
-    "$<$<CONFIG:Release>:-O3>"
-    "$<$<CONFIG:Release>:-ffast-math>"
-    "$<$<CONFIG:Release>:-march=native>"
+    -Wall
+    -Wextra
+    -Wpedantic
 )
 
 target_compile_options(cnes PRIVATE
-    $<$<CONFIG:Debug>:-fsanitize=address>
+    $<$<CONFIG:Debug>:-O0>
+    $<$<CONFIG:Debug>:-g3>
+    $<$<CONFIG:Debug>:-fno-omit-frame-pointer>
+    $<$<CONFIG:Debug>:-fno-optimize-sibling-calls>
+    $<$<CONFIG:Debug>:-fsanitize=address,undefined>
 )
 
 target_link_options(cnes PRIVATE
-    $<$<CONFIG:Debug>:-fsanitize=address>
+    $<$<CONFIG:Debug>:-fsanitize=address,undefined>
 )
 
 target_link_libraries(cnes PRIVATE SDL3::SDL3 m)
