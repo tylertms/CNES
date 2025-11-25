@@ -105,57 +105,45 @@ uint8_t ppu_clock(_ppu* ppu) {
 
             if (next_scanline < NES_H) {
                 for (uint8_t i = 0; i < ppu->sprite_count; i++) {
-                    uint8_t sprite_pattern_bits_low;
-                    uint8_t sprite_pattern_bits_high;
-                    uint16_t sprite_pattern_addr_low;
-                    uint16_t sprite_pattern_addr_high;
+                    _sprite *s = &ppu->sprites[i];
+
+                    int16_t line = (int16_t)ppu->scanline - (int16_t)s->pos_y;
+                    uint8_t flip_v = s->attr & FLIP_VERTICAL;
+                    uint8_t flip_h = s->attr & FLIP_HORIZONTAL;
+
+                    uint16_t addr_low, addr_high;
 
                     if (ppu->ppuctrl & SPRITE_HEIGHT) {
-                        if (ppu->sprites[i].attr & FLIP_VERTICAL) {
-                            if (ppu->scanline - ppu->sprites[i].pos_y < 8) {
-                                sprite_pattern_addr_low = ((ppu->sprites[i].id & 0x01) << 12) |
-                                    (((ppu->sprites[i].id & 0xFE) + 1) << 4) |
-                                    (7 - (ppu->scanline - ppu->sprites[i].pos_y) & 0x07);
-                            } else {
-                                sprite_pattern_addr_low = ((ppu->sprites[i].id & 0x01) << 12) |
-                                    ((ppu->sprites[i].id & 0xFE) << 4) |
-                                    (7 - (ppu->scanline - ppu->sprites[i].pos_y) & 0x07);
-                            }
-                        } else {
-                            if (ppu->scanline - ppu->sprites[i].pos_y < 8) {
-                                sprite_pattern_addr_low = ((ppu->sprites[i].id & 0x01) << 12) |
-                                    ((ppu->sprites[i].id & 0xFE) << 4) |
-                                    ((ppu->scanline - ppu->sprites[i].pos_y) & 0x07);
-                            } else {
-                                sprite_pattern_addr_low = ((ppu->sprites[i].id & 0x01) << 12) |
-                                    (((ppu->sprites[i].id & 0xFE) + 1) << 4) |
-                                    ((ppu->scanline - ppu->sprites[i].pos_y) & 0x07);
-                            }
-                        }
+                        // 8x16 sprites
+                        uint8_t y = (uint8_t)line;
+                        if (flip_v) y = 15 - y;
+
+                        uint8_t tile = s->id & 0xFE;
+                        if (y >= 8) tile++;
+
+                        uint16_t table = (s->id & 0x01) ? 0x1000 : 0x0000;
+                        addr_low = table | ((uint16_t)tile << 4) | (y & 0x07);
                     } else {
-                        if (ppu->sprites[i].attr & FLIP_VERTICAL) {
-                            sprite_pattern_addr_low = ((ppu->ppuctrl & SPRITE_SEL) << 9) |
-                                (ppu->sprites[i].id << 4) |
-                                (7 - (ppu->scanline - ppu->sprites[i].pos_y));
-                        } else {
-                            sprite_pattern_addr_low = ((ppu->ppuctrl & SPRITE_SEL) << 9) |
-                                (ppu->sprites[i].id << 4) |
-                                (ppu->scanline - ppu->sprites[i].pos_y);
-                        }
+                        // 8x8 sprites
+                        uint8_t y = (uint8_t)line & 0x07;
+                        if (flip_v) y = 7 - y;
+
+                        uint16_t base = (ppu->ppuctrl & SPRITE_SEL) ? 0x1000 : 0x0000;
+                        addr_low = base | ((uint16_t)s->id << 4) | y;
                     }
 
-                    sprite_pattern_addr_high = sprite_pattern_addr_low + 8;
+                    addr_high = addr_low + 8;
 
-                    sprite_pattern_bits_low = ppu_read(ppu, sprite_pattern_addr_low);
-                    sprite_pattern_bits_high = ppu_read(ppu, sprite_pattern_addr_high);
+                    uint8_t bits_lo = ppu_read(ppu, addr_low);
+                    uint8_t bits_hi = ppu_read(ppu, addr_high);
 
-                    if (ppu->sprites[i].attr & FLIP_HORIZONTAL) {
-                        sprite_pattern_bits_low = reverse_byte(sprite_pattern_bits_low);
-                        sprite_pattern_bits_high = reverse_byte(sprite_pattern_bits_high);
+                    if (flip_h) {
+                        bits_lo = reverse_byte(bits_lo);
+                        bits_hi = reverse_byte(bits_hi);
                     }
 
-                    ppu->sprite_pattern_low[i] = sprite_pattern_bits_low;
-    				ppu->sprite_pattern_high[i] = sprite_pattern_bits_high;
+                    ppu->sprite_pattern_low[i] = bits_lo;
+                    ppu->sprite_pattern_high[i] = bits_hi;
                 }
             }
         }
