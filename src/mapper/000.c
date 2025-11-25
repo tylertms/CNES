@@ -1,4 +1,7 @@
-#include "mapper.h"
+#include "../mapper.h"
+
+void map_init_000(_cart* cart) {}
+void map_deinit_000(_cart* cart) {}
 
 uint8_t map_cpu_read_000(_cart* cart, uint16_t addr) {
     uint8_t data = 0x00;
