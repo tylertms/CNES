@@ -19,7 +19,6 @@ uint8_t nes_init(_nes* nes, char* file, _gui* gui) {
 
     uint8_t res = cart_load(&nes->cart, file);
     if (res) {
-        gui_deinit(gui);
         return 1;
     }
 
@@ -29,6 +28,7 @@ uint8_t nes_init(_nes* nes, char* file, _gui* gui) {
 
 void nes_deinit(_nes* nes) {
     apu_deinit(&nes->apu);
+    nes->cart.mapper.deinit(&nes->cart);
 }
 
 void nes_reset(_nes* nes) {
