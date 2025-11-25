@@ -309,14 +309,14 @@ uint8_t ppu_cpu_read(_ppu* ppu, uint16_t addr) {
 
 void ppu_cpu_write(_ppu* ppu, uint16_t addr, uint8_t data) {
     switch (addr) {
-        case PPUCTRL:   return ppuctrl_cpu_write(ppu, data);
-        case PPUMASK:   return ppumask_cpu_write(ppu, data);
-        case OAMADDR:   return oamaddr_cpu_write(ppu, data);
-        case OAMDATA:   return oamdata_cpu_write(ppu, data);
-        case PPUSCROLL: return ppuscroll_cpu_write(ppu, data);
-        case PPUADDR:   return ppuaddr_cpu_write(ppu, data);
-        case PPUDATA:   return ppudata_cpu_write(ppu, data);
-        case OAMDMA:    return oamdma_cpu_write(ppu, data);
+        case PPUCTRL:   ppuctrl_cpu_write(ppu, data);   break;
+        case PPUMASK:   ppumask_cpu_write(ppu, data);   break;
+        case OAMADDR:   oamaddr_cpu_write(ppu, data);   break;
+        case OAMDATA:   oamdata_cpu_write(ppu, data);   break;
+        case PPUSCROLL: ppuscroll_cpu_write(ppu, data); break;
+        case PPUADDR:   ppuaddr_cpu_write(ppu, data);   break;
+        case PPUDATA:   ppudata_cpu_write(ppu, data);   break;
+        case OAMDMA:    oamdma_cpu_write(ppu, data);    break;
         default:        return;
     }
 }
