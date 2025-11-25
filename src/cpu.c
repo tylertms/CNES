@@ -104,13 +104,7 @@ uint8_t cpu_read(_cpu* cpu, uint16_t addr) {
             data = ppu_cpu_read(cpu->p_ppu, reg_addr);
         }
     } else if (0x4016 <= addr && addr <= 0x4017) {
-        uint8_t pad = addr & 0x0001;
-        if (cpu->p_input->strobe) {
-            data = (cpu->p_input->controller[pad] & 0x80) ? 1 : 0;
-        } else {
-            data = (cpu->p_input->shift[pad] & 0x80) ? 1 : 0;
-            cpu->p_input->shift[pad] <<= 1;
-        }
+        data = input_cpu_read(cpu->p_input, addr);
     } else if (0x4020 <= addr && addr <= 0xFFFF) {
         if (cpu->p_cart) {
             data = cart_cpu_read(cpu->p_cart, addr);
@@ -131,12 +125,7 @@ void cpu_write(_cpu* cpu, uint16_t addr, uint8_t data) {
     } else if (addr == 0x4014) {
         oamdma_cpu_write(cpu->p_ppu, data);
     } else if (addr == 0x4016) {
-        uint8_t new_strobe = data & 0x01;
-        if (cpu->p_input->strobe && !new_strobe) {
-            cpu->p_input->shift[0] = cpu->p_input->controller[0];
-            cpu->p_input->shift[1] = cpu->p_input->controller[1];
-        }
-        cpu->p_input->strobe = new_strobe;
+        input_cpu_write(cpu->p_input, addr, data);
     } else if (0x4020 <= addr && addr <= 0xFFFF) {
         if (cpu->p_cart) {
             cart_cpu_write(cpu->p_cart, addr, data);
