@@ -81,9 +81,10 @@ uint8_t ppu_clock(_ppu* ppu) {
             uint16_t next_scanline = (ppu->scanline + 1) % (NES_ALL_HMAX + 1);
 
             if (next_scanline < NES_H) {
+                int16_t eval_scanline = (ppu->scanline == NES_ALL_HMAX) ? 0 : (int16_t)ppu->scanline;
                 uint8_t oam_entry = 0;
                 while (oam_entry < 64 && ppu->sprite_count < 9) {
-                    int16_t offset = (int16_t)ppu->scanline - (int16_t)ppu->oam[oam_entry].pos_y;
+                    int16_t offset = eval_scanline - (int16_t)ppu->oam[oam_entry].pos_y;
                     int16_t max_offset = ppu->ppuctrl & SPRITE_HEIGHT ? 16 : 8;
 
                     if (offset >= 0 && offset < max_offset) {
@@ -104,10 +105,12 @@ uint8_t ppu_clock(_ppu* ppu) {
             uint16_t next_scanline = (ppu->scanline + 1) % (NES_ALL_HMAX + 1);
 
             if (next_scanline < NES_H) {
+                int16_t line_scan = (ppu->scanline == NES_ALL_HMAX) ? 0 : (int16_t)ppu->scanline;
+
                 for (uint8_t i = 0; i < ppu->sprite_count; i++) {
                     _sprite *s = &ppu->sprites[i];
 
-                    int16_t line = (int16_t)ppu->scanline - (int16_t)s->pos_y;
+                    int16_t line = line_scan - (int16_t)s->pos_y;
                     uint8_t flip_v = s->attr & FLIP_VERTICAL;
                     uint8_t flip_h = s->attr & FLIP_HORIZONTAL;
 
@@ -147,11 +150,6 @@ uint8_t ppu_clock(_ppu* ppu) {
                 }
             }
         }
-
-        if (ppu->scanline == NES_ALL_HMAX && ppu->cycle == 1) {
-            uint8_t skip = ppu->even_frame && (ppu->ppumask & (BGRND_EN | SPRITE_EN));
-            if (skip) ppu->cycle = 1;
-        }
     }
 
     uint8_t frame_complete = 0x00;
@@ -180,6 +178,11 @@ uint8_t ppu_clock(_ppu* ppu) {
         bgrnd_palette = (bgrnd_palette1 << 1) | bgrnd_palette0;
     }
 
+    if (!(ppu->ppumask & BGRND_LC_EN) &&
+        ppu->cycle >= 1 && ppu->cycle <= 8) {
+        bgrnd_pixel = 0;
+    }
+
     uint8_t sprite_pixel = 0x00;
     uint8_t sprite_palette = 0x00;
     uint8_t sprite_priority = 0x00;
@@ -201,6 +204,11 @@ uint8_t ppu_clock(_ppu* ppu) {
                 }
             }
         }
+    }
+
+    if (!(ppu->ppumask & SPRITE_LC_EN) &&
+        ppu->cycle >= 1 && ppu->cycle <= 8) {
+        sprite_pixel = 0;
     }
 
     uint8_t pixel = 0x00;
