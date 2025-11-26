@@ -85,7 +85,7 @@ void cpu_clock(_cpu* cpu);
 
 void cpu_reset(_cpu* cpu);
 void cpu_irq(_cpu* cpu);
-void cpu_nmi(_cpu* cpu, uint8_t brk);
+void cpu_nmi(_cpu* cpu);
 
 uint8_t cpu_read(_cpu* cpu, uint16_t addr);
 void cpu_write(_cpu* cpu, uint16_t addr, uint8_t data);

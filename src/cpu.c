@@ -1,4 +1,3 @@
-// cpu.c
 #include "cpu.h"
 #include "cart.h"
 #include "input.h"
@@ -14,7 +13,7 @@ void cpu_clock(_cpu* cpu) {
 
     if (cpu->nmi_pending) {
         cpu->nmi_pending = 0;
-        cpu_nmi(cpu, 0);
+        cpu_nmi(cpu);
         return;
     }
 
@@ -61,13 +60,17 @@ void cpu_irq(_cpu* cpu) {
     if (get_flag(cpu, IRQ_DS))
         return;
 
+    cpu->irq_pending = 0;
+
     push(cpu, cpu->pc >> 8);
     push(cpu, cpu->pc & 0xFF);
 
-    set_flag(cpu, BREAK, 0);
-    set_flag(cpu, UNUSED, 1);
+    uint8_t flags = cpu->p;
+    flags &= ~BREAK;
+    flags |= UNUSED;
+
+    push(cpu, flags);
     set_flag(cpu, IRQ_DS, 1);
-    push(cpu, cpu->p);
 
     uint16_t low = cpu_read(cpu, IRQ_VECTOR);
     uint16_t high = cpu_read(cpu, IRQ_VECTOR + 1);
@@ -75,22 +78,21 @@ void cpu_irq(_cpu* cpu) {
     cpu->cycles = 7;
 }
 
-void cpu_nmi(_cpu* cpu, uint8_t brk) {
-    if (brk) cpu->pc++;
-
+void cpu_nmi(_cpu* cpu) {
     push(cpu, cpu->pc >> 8);
     push(cpu, cpu->pc & 0xFF);
 
-    set_flag(cpu, BREAK, brk);
-    set_flag(cpu, UNUSED, 1);
-    set_flag(cpu, IRQ_DS, 1);
-    push(cpu, cpu->p);
-    set_flag(cpu, BREAK, 0);
+    uint8_t flags = cpu->p;
+    flags &= ~BREAK;
+    flags |= UNUSED;
 
-    uint16_t low = cpu_read(cpu, brk ? IRQ_VECTOR : NMI_VECTOR);
-    uint16_t high = cpu_read(cpu, brk ? IRQ_VECTOR + 1 : NMI_VECTOR + 1);
+    push(cpu, flags);
+    set_flag(cpu, IRQ_DS, 1);
+
+    uint16_t low = cpu_read(cpu, NMI_VECTOR);
+    uint16_t high = cpu_read(cpu, NMI_VECTOR + 1);
     cpu->pc = (high << 8) | low;
-    cpu->cycles = 8;
+    cpu->cycles = 7;
 }
 
 uint8_t cpu_read(_cpu* cpu, uint16_t addr) {
@@ -358,7 +360,23 @@ uint8_t op_bpl(_cpu* cpu) {
 }
 
 uint8_t op_brk(_cpu* cpu) {
-    cpu_nmi(cpu, 1);
+    cpu->pc++;
+
+    push(cpu, cpu->pc >> 8);
+    push(cpu, cpu->pc & 0xFF);
+
+    uint8_t flags = cpu->p;
+    flags |= BREAK;
+    flags |= UNUSED;
+
+    push(cpu, flags);
+    set_flag(cpu, IRQ_DS, 1);
+
+    uint16_t low  = cpu_read(cpu, IRQ_VECTOR);
+    uint16_t high = cpu_read(cpu, IRQ_VECTOR + 1);
+    cpu->pc = (high << 8) | low;
+    cpu->cycles = 7;
+
     return 0;
 }
 
