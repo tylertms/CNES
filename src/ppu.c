@@ -106,9 +106,8 @@ uint8_t ppu_clock(_ppu* ppu) {
 
             uint16_t next_scanline = (ppu->scanline + 1) % (NES_ALL_HMAX + 1);
 
-            if (render_enabled(ppu) &&
-                next_scanline < NES_H && ppu->scanline < NES_H) {
-                int16_t eval_scanline = (int16_t)next_scanline;
+            if (render_enabled(ppu) && next_scanline < NES_H && ppu->scanline < NES_H) {
+                int16_t eval_scanline = (ppu->scanline == NES_ALL_HMAX) ? 0 : (int16_t)ppu->scanline;
                 uint8_t oam_entry = 0;
                 while (oam_entry < 64 && ppu->sprite_count < 9) {
                     int16_t offset = eval_scanline - (int16_t)ppu->oam[oam_entry].pos_y;
@@ -132,12 +131,10 @@ uint8_t ppu_clock(_ppu* ppu) {
             uint16_t next_scanline = (ppu->scanline + 1) % (NES_ALL_HMAX + 1);
 
             if (next_scanline < NES_H && ppu->scanline < NES_H) {
-                int16_t line_scan = (int16_t)next_scanline;
-
                 for (uint8_t i = 0; i < ppu->sprite_count; i++) {
                     _sprite *s = &ppu->sprites[i];
 
-                    int16_t line = line_scan - (int16_t)s->pos_y;
+                    int16_t line = ppu->scanline - (int16_t)s->pos_y;
                     uint8_t flip_v = s->attr & FLIP_VERTICAL;
                     uint8_t flip_h = s->attr & FLIP_HORIZONTAL;
 
