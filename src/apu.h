@@ -3,9 +3,51 @@
 
 #define SAMPLE_RATE 48000.f
 
+typedef struct _pulse {
+    uint8_t duty;
+    uint8_t env_loop;
+    uint8_t constant_volume;
+    uint8_t volume_env;
+    uint8_t sweep_enable;
+    uint8_t period;
+    uint8_t negate;
+    uint8_t shift;
+    uint8_t length_counter_load;
+    uint16_t timer;
+} _pulse;
+
+typedef struct _triangle {
+    uint8_t counter_control;
+    uint8_t linear_counter_load;
+    uint8_t length_counter_load;
+    uint16_t timer;
+} _triangle;
+
+typedef struct _noise {
+    uint8_t env_loop;
+    uint8_t constant_volume;
+    uint8_t volume_env;
+    uint8_t mode;
+    uint8_t period;
+    uint8_t length_counter_load;
+} _noise;
+
+typedef struct _dmc {
+    uint8_t irq_enable;
+    uint8_t loop;
+    uint8_t frequency;
+    uint8_t load_counter;
+    uint8_t sample_address;
+    uint8_t sample_length;
+} _dmc;
+
 typedef struct _apu {
     SDL_AudioStream* audio_stream;
-    uint32_t sine_sample_index;
+    _pulse pulse1;
+    _pulse pulse2;
+    _triangle triangle;
+    _noise noise;
+    _dmc dmc;
 } _apu;
 
 void apu_init(_apu* apu);
