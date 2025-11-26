@@ -38,9 +38,11 @@ typedef struct _ppu {
     uint8_t ppudata;
     uint8_t oamdma;
 
+    uint16_t bus_decay;
+    uint8_t data_buffer;
+
     uint16_t vram_addr;
     uint16_t tram_addr;
-    uint8_t data_buffer;
     uint8_t fine_x;
     uint8_t write_toggle;
 
@@ -67,7 +69,8 @@ typedef struct _ppu {
     uint8_t sprite_0_hit_possible;
     uint8_t sprite_0_rendered;
 
-    uint8_t even_frame;
+    uint8_t odd_frame;
+    uint8_t nmi_line;
 
     _cpu* p_cpu;
     _cart* p_cart;
@@ -157,6 +160,7 @@ void transfer_addr_x(_ppu* ppu);
 void transfer_addr_y(_ppu* ppu);
 void load_bgrnd_shifters(_ppu* ppu);
 void update_shifters(_ppu* ppu);
+void ppu_update_nmi(_ppu *ppu);
 uint32_t get_color(_ppu* ppu, uint8_t palette, uint8_t emphasis, uint8_t pixel);
 
 uint8_t physical_nametable(_cart* cart, uint8_t logical);
