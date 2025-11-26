@@ -1,4 +1,5 @@
 #pragma once
+#include "cpu.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -60,6 +61,8 @@ typedef struct _cart {
     uint8_t cpu_ppu_timing;
     uint8_t misc_roms;
     uint8_t expansion_device;
+
+    _cpu* p_cpu;
 } _cart;
 
 uint8_t cart_load(_cart* cart, char* file);

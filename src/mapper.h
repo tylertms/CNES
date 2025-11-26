@@ -19,11 +19,16 @@ MAPDEF(000)
 MAPDEF(001)
 MAPDEF(002)
 MAPDEF(003)
+MAPDEF(004)
 
 /* MAPPER TABLE */
 static _mapper mappers[768] = {
     MAPPER(000),
     MAPPER(001),
     MAPPER(002),
-    MAPPER(003)
+    MAPPER(003),
+    MAPPER(004)
 };
+
+/* MISC */
+void mmc3_scanline_tick(_cart* cart);
