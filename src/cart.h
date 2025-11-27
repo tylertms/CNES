@@ -4,7 +4,7 @@
 #include <stddef.h>
 
 typedef struct _cart _cart;
-typedef void (*map_fn_ctrl)(_cart*);
+typedef uint8_t (*map_fn_ctrl)(_cart*);
 typedef uint8_t (*map_fn_read)(_cart*, uint16_t);
 typedef void (*map_fn_write)(_cart*, uint16_t, uint8_t);
 
@@ -19,6 +19,7 @@ typedef enum {
 typedef struct _mapper {
     map_fn_ctrl init;
     map_fn_ctrl deinit;
+    map_fn_ctrl irq_pending;
     map_fn_read cpu_read;
     map_fn_write cpu_write;
     map_fn_read ppu_read;
@@ -61,8 +62,6 @@ typedef struct _cart {
     uint8_t cpu_ppu_timing;
     uint8_t misc_roms;
     uint8_t expansion_device;
-
-    _cpu* p_cpu;
 } _cart;
 
 uint8_t cart_load(_cart* cart, char* file);
