@@ -20,6 +20,7 @@ MAPDEF(001)
 MAPDEF(002)
 MAPDEF(003)
 MAPDEF(004)
+MAPDEF(007)
 
 /* MAPPER TABLE */
 static _mapper mappers[768] = {
@@ -27,7 +28,8 @@ static _mapper mappers[768] = {
     MAPPER(001),
     MAPPER(002),
     MAPPER(003),
-    MAPPER(004)
+    MAPPER(004),
+    MAPPER(007),
 };
 
 /* MISC */
