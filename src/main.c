@@ -58,8 +58,6 @@ int main(int argc, char **argv) {
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_EVENT_KEY_DOWN && event.key.repeat) continue;
-
             switch (event.type) {
             case SDL_EVENT_QUIT:
             case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
@@ -67,8 +65,9 @@ int main(int argc, char **argv) {
                 break;
 
             case SDL_EVENT_KEY_DOWN:
-                if (event.key.scancode == SDL_SCANCODE_BACKSPACE) {
-                    cpu_reset(&nes.cpu);
+                if (event.key.scancode == SDL_SCANCODE_BACKSPACE |
+                    event.key.scancode == SDL_SCANCODE_DELETE) {
+                    nes_reset(&nes);
                 } else {
                     SDL_HideCursor();
                 }

@@ -44,6 +44,10 @@ void nes_deinit(_nes* nes) {
 void nes_reset(_nes* nes) {
     apu_reset(&nes->apu);
     cpu_reset(&nes->cpu);
+
+    _cart* cart = &nes->cart;
+    cart->mapper.deinit(cart);
+    cart->mapper.init(cart);
 }
 
 void nes_clock(_nes* nes) {
