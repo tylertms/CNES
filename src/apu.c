@@ -70,11 +70,11 @@ void apu_clock(_apu* apu) {
     if (apu->sample_acc >= 1.0) {
         apu->sample_acc -= 1.0;
 
-        uint8_t raw_pulse1 = sample_pulse(&apu->pulse1, apu->status.enable_pulse1);
-        uint8_t raw_pulse2 = sample_pulse(&apu->pulse2, apu->status.enable_pulse2);
-        uint8_t raw_triangle = sample_triangle(&apu->triangle, apu->status.enable_triangle);
-        uint8_t raw_noise = sample_noise(&apu->noise, apu->status.enable_noise);
-        uint8_t raw_dmc = sample_dmc(&apu->dmc, apu->status.enable_dmc);
+        uint8_t raw_pulse1 = sample_pulse(&apu->pulse1);
+        uint8_t raw_pulse2 = sample_pulse(&apu->pulse2);
+        uint8_t raw_triangle = sample_triangle(&apu->triangle);
+        uint8_t raw_noise = sample_noise(&apu->noise);
+        uint8_t raw_dmc = sample_dmc(&apu->dmc);
 
         int gate_pulse1 = apu->status.enable_pulse1 && apu->pulse1.length > 0 &&
                           apu->pulse1.timer >= 8 && !apu->pulse1.sweep_mute &&
@@ -135,6 +135,7 @@ uint8_t apu_cpu_read(_apu* apu, uint16_t addr) {
     if (apu->frame_counter_irq) data |= 0x80;
 
     apu->frame_counter_irq = 0;
+    apu->dmc.irq_pending = 0;
 
     return data;
 }
@@ -180,6 +181,27 @@ void apu_cpu_write(_apu* apu, uint16_t addr, uint8_t data) {
         }
 
         apu->dmc.irq_pending = 0;
+    } else if (addr == 0x4017) {
+        apu->frame_counter.mode = (data & 0x80) ? 1 : 0;
+        apu->frame_counter.irq_inhibit = (data & 0x40) ? 1 : 0;
+        apu->frame_cycle = 0;
+
+        if (apu->frame_counter.irq_inhibit)
+            apu->frame_counter_irq = 0;
+
+        if (apu->frame_counter.mode) {
+            clock_pulse_envelope(&apu->pulse1);
+            clock_pulse_envelope(&apu->pulse2);
+            clock_noise_envelope(&apu->noise);
+            clock_triangle_linear(&apu->triangle);
+
+            clock_pulse_length(&apu->pulse1);
+            clock_pulse_length(&apu->pulse2);
+            clock_noise_length(&apu->noise);
+            clock_triangle_length(&apu->triangle);
+            clock_pulse_sweep(&apu->pulse1, 1);
+            clock_pulse_sweep(&apu->pulse2, 0);
+        }
     }
 }
 
@@ -333,28 +355,55 @@ void dmc_cpu_write(_apu* apu, uint16_t addr, uint8_t data) {
 }
 
 
+static inline void clock_quarter_frame(_apu *apu) {
+    clock_pulse_envelope(&apu->pulse1);
+    clock_pulse_envelope(&apu->pulse2);
+    clock_noise_envelope(&apu->noise);
+    clock_triangle_linear(&apu->triangle);
+}
+
+static inline void clock_half_frame(_apu *apu) {
+    clock_pulse_length(&apu->pulse1);
+    clock_pulse_length(&apu->pulse2);
+    clock_noise_length(&apu->noise);
+    clock_triangle_length(&apu->triangle);
+    clock_pulse_sweep(&apu->pulse1, 1);
+    clock_pulse_sweep(&apu->pulse2, 0);
+}
+
 void clock_frame_counter(_apu* apu) {
-    apu->frame_cycle++;
-    int c = apu->frame_cycle;
+    int c = apu->frame_cycle++;
 
-    if (c == FC_STEP1 || c == FC_STEP2 || c == FC_STEP3 || c == FC_STEP4) {
-        clock_pulse_envelope(&apu->pulse1);
-        clock_pulse_envelope(&apu->pulse2);
-        clock_noise_envelope(&apu->noise);
-        clock_triangle_linear(&apu->triangle);
-    }
+    if (apu->frame_counter.mode == 0) {
+        if (c == FC4_STEP1 || c == FC4_STEP2 ||
+            c == FC4_STEP3 || c == FC4_STEP4) {
+            clock_quarter_frame(apu);
+        }
 
-    if (c == FC_STEP2 || c == FC_STEP4) {
-        clock_pulse_length(&apu->pulse1);
-        clock_pulse_length(&apu->pulse2);
-        clock_noise_length(&apu->noise);
-        clock_triangle_length(&apu->triangle);
-        clock_pulse_sweep(&apu->pulse1, 1);
-        clock_pulse_sweep(&apu->pulse2, 0);
-    }
+        if (c == FC4_STEP2 || c == FC4_STEP4) {
+            clock_half_frame(apu);
+        }
 
-    if (apu->frame_cycle >= FC_PERIOD) {
-        apu->frame_cycle -= FC_PERIOD;
+        if (c == FC4_STEP4 && !apu->frame_counter.irq_inhibit) {
+            apu->frame_counter_irq = 1;
+        }
+
+        if (c >= FC4_PERIOD) {
+            apu->frame_cycle -= FC4_PERIOD;
+        }
+    } else {
+        if (c == 0 || c == FC5_STEP1 || c == FC5_STEP2 ||
+            c == FC5_STEP3 || c == FC5_STEP4) {
+            clock_quarter_frame(apu);
+        }
+
+        if (c == FC5_STEP2 || c == FC5_STEP4) {
+            clock_half_frame(apu);
+        }
+
+        if (c >= FC5_PERIOD) {
+            apu->frame_cycle -= FC5_PERIOD;
+        }
     }
 }
 
@@ -384,17 +433,26 @@ void clock_pulse_length(_pulse* p) {
     }
 }
 
-static uint16_t pulse_sweep_target(_pulse* p, int is_pulse1) {
-    uint16_t t = p->timer;
-    uint16_t delta = t >> p->shift;
+static uint16_t pulse_sweep_target(_pulse *p, int is_pulse1) {
+    int16_t period = (int16_t)(p->timer & 0x7FF);
+    int16_t delta  = (int16_t)(period >> p->shift);
+
+    int16_t target;
+
     if (!p->negate) {
-        return t + delta;
+        target = period + delta;
     } else {
-        if (is_pulse1)
-            return t - delta - 1;
-        else
-            return t - delta;
+        if (is_pulse1) {
+            target = period - delta - 1;
+        } else {
+            target = period - delta;
+        }
     }
+
+    if (target < 0)
+        target = 0;
+
+    return (uint16_t)target;
 }
 
 void clock_pulse_sweep(_pulse* p, int is_pulse1) {
@@ -427,8 +485,7 @@ void clock_pulse(_pulse* p) {
     }
 }
 
-uint8_t sample_pulse(_pulse* p, uint8_t enabled) {
-    if (!enabled) return 0;
+uint8_t sample_pulse(_pulse* p) {
     if (p->length == 0) return 0;
     if (p->timer < 8) return 0;
     if (p->sweep_mute) return 0;
@@ -474,8 +531,7 @@ void clock_triangle(_triangle* t) {
     }
 }
 
-uint8_t sample_triangle(_triangle* t, uint8_t enabled) {
-    (void)enabled;
+uint8_t sample_triangle(_triangle* t) {
     return triangle_seq[t->seq_step];
 }
 
@@ -527,10 +583,9 @@ void clock_noise(_noise* n) {
     }
 }
 
-uint8_t sample_noise(_noise* n, uint8_t enabled) {
+uint8_t sample_noise(_noise* n) {
     uint8_t vol = n->constant_volume ? n->volume_env : n->env;
 
-    if (!enabled) return 0;
     if (n->length == 0) return 0;
     if (vol == 0) return 0;
     if (n->shift_reg & 1) return 0;
@@ -617,8 +672,7 @@ void clock_dmc(_apu* apu) {
     }
 }
 
-uint8_t sample_dmc(_dmc* d, uint8_t enabled) {
-    if (!enabled) return 0;
+uint8_t sample_dmc(_dmc* d) {
     return d->output;
 }
 

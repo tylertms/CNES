@@ -7,11 +7,18 @@
 #define GLOBAL_VOLUME 1.0
 #define RAMP_SAMPLES 64
 
-#define FC_STEP1  3728
-#define FC_STEP2  7456
-#define FC_STEP3  11185
-#define FC_STEP4  14914
-#define FC_PERIOD 14915
+#define FC4_STEP1  3728
+#define FC4_STEP2  7456
+#define FC4_STEP3  11185
+#define FC4_STEP4  14914
+#define FC4_PERIOD 14915
+
+#define FC5_STEP1   3728
+#define FC5_STEP2   7456
+#define FC5_STEP3   11185
+#define FC5_STEP4   14914
+#define FC5_STEP5   18640
+#define FC5_PERIOD  18641
 
 typedef struct _pulse {
     uint8_t duty;
@@ -227,20 +234,20 @@ void clock_pulse_envelope(_pulse *p);
 void clock_pulse_length(_pulse *p);
 void clock_pulse_sweep(_pulse *p, int is_pulse1);
 void clock_pulse(_pulse *p);
-uint8_t sample_pulse(_pulse *p, uint8_t enabled);
+uint8_t sample_pulse(_pulse *p);
 
 void clock_triangle_linear(_triangle *t);
 void clock_triangle_length(_triangle *t);
 void clock_triangle(_triangle *t);
-uint8_t sample_triangle(_triangle *t, uint8_t enabled);
+uint8_t sample_triangle(_triangle *t);
 
 void clock_noise_envelope(_noise *n);
 void clock_noise_length(_noise *n);
 void clock_noise(_noise *n);
-uint8_t sample_noise(_noise *n, uint8_t enabled);
+uint8_t sample_noise(_noise *n);
 
 void clock_dmc(_apu *apu);
-uint8_t sample_dmc(_dmc *d, uint8_t enabled);
+uint8_t sample_dmc(_dmc *d);
 void dmc_dma_complete(_apu* apu);
 
 float mix(float pulse1, float pulse2, float triangle, float noise, float dmc);
