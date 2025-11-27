@@ -168,17 +168,43 @@ static const uint16_t dmc_period[16] = {
     106,  85,  72,  54
 };
 
-void apu_init(_apu* apu);
-void apu_deinit(_apu* apu);
+static inline float release_smooth(float rel, int gate_on) {
+    const float r = 0.995f;
+    return gate_on ? 1.0f : rel * r;
+}
 
-void apu_clock(_apu* apu);
-void apu_reset(_apu* apu);
+void clock_envelope(_pulse *p);
+void clock_frame_counter(_apu *apu);
+void clock_length(_pulse *p);
+void clock_sweep(_pulse *p, int is_pulse1);
+void clock_pulse(_pulse *p);
+uint8_t sample_pulse(_pulse *p, uint8_t enabled);
 
-uint8_t apu_cpu_read(_apu* apu, uint16_t addr);
-void apu_cpu_write(_apu* apu, uint16_t addr, uint8_t data);
+void clock_triangle_linear(_triangle *t);
+void clock_triangle_length(_triangle *t);
+void clock_triangle(_triangle *t);
+uint8_t sample_triangle(_triangle *t, uint8_t enabled);
 
-void pulse1_cpu_write(_apu* apu, uint16_t addr, uint8_t data);
-void pulse2_cpu_write(_apu* apu, uint16_t addr, uint8_t data);
-void triangle_cpu_write(_apu* apu, uint16_t addr, uint8_t data);
-void noise_cpu_write(_apu* apu, uint16_t addr, uint8_t data);
-void dmc_cpu_write(_apu* apu, uint16_t addr, uint8_t data);
+void clock_noise_envelope(_noise *n);
+void clock_noise_length(_noise *n);
+void clock_noise(_noise *n);
+uint8_t sample_noise(_noise *n, uint8_t enabled);
+
+void clock_dmc(_apu *apu);
+uint8_t sample_dmc(_dmc *d, uint8_t enabled);
+
+float mix(float pulse1, float pulse2, float triangle, float noise, float dmc);
+
+void apu_init(_apu *apu);
+void apu_deinit(_apu *apu);
+void apu_clock(_apu *apu);
+void apu_reset(_apu *apu);
+
+uint8_t apu_cpu_read(_apu *apu, uint16_t addr);
+void apu_cpu_write(_apu *apu, uint16_t addr, uint8_t data);
+
+void pulse1_cpu_write(_apu *apu, uint16_t addr, uint8_t data);
+void pulse2_cpu_write(_apu *apu, uint16_t addr, uint8_t data);
+void triangle_cpu_write(_apu *apu, uint16_t addr, uint8_t data);
+void noise_cpu_write(_apu *apu, uint16_t addr, uint8_t data);
+void dmc_cpu_write(_apu *apu, uint16_t addr, uint8_t data);

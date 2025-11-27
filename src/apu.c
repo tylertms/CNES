@@ -3,321 +3,6 @@
 #include <SDL3/SDL_hints.h>
 #include <stdio.h>
 
-void clock_envelope(_pulse* p) {
-    if (p->env_start) {
-        p->env_start = 0;
-        p->env = 15;
-        p->env_div = p->volume_env;
-    } else {
-        if (p->env_div == 0) {
-            p->env_div = p->volume_env;
-            if (p->env > 0) {
-                p->env--;
-            } else if (p->env_loop) {
-                p->env = 15;
-            }
-        } else {
-            p->env_div--;
-        }
-    }
-}
-
-#define FC_PERIOD 29830
-#define FC_STEP1  3729
-#define FC_STEP2  7457
-#define FC_STEP3  11186
-#define FC_STEP4  14916
-
-void clock_frame_counter(_apu* apu) {
-    apu->frame_cycle++;
-    int c = apu->frame_cycle;
-
-    if (c == FC_STEP1 || c == FC_STEP2 || c == FC_STEP3 || c == FC_STEP4) {
-        clock_envelope(&apu->pulse1);
-        clock_envelope(&apu->pulse2);
-    }
-
-    if (apu->frame_cycle >= FC_PERIOD) {
-        apu->frame_cycle -= FC_PERIOD;
-    }
-}
-
-void clock_length(_pulse* p) {
-    if (!p->env_loop && p->length > 0) {
-        p->length--;
-    }
-}
-
-
-static uint16_t sweep_target(_pulse* p, int is_pulse1) {
-    uint16_t t = p->timer;
-    uint16_t delta = t >> p->shift;
-    if (!p->negate) {
-        return t + delta;
-    } else {
-        if (is_pulse1)
-            return t - delta - 1;
-        else
-            return t - delta;
-    }
-}
-
-void clock_sweep(_pulse* p, int is_pulse1) {
-    if (!p->sweep_enable || p->shift == 0) {
-        p->sweep_mute = 0;
-        return;
-    }
-
-    if (p->sweep_reload) {
-        p->sweep_reload = 0;
-        p->sweep_div = p->period;
-    } else {
-        if (p->sweep_div > 0) {
-            p->sweep_div--;
-        } else {
-            p->sweep_div = p->period;
-            uint16_t target = sweep_target(p, is_pulse1);
-            if (target <= 0x7FF && p->timer >= 8) {
-                p->timer = target;
-            }
-        }
-    }
-
-    uint16_t target = sweep_target(p, is_pulse1);
-    if (target > 0x7FF) {
-        p->sweep_mute = 1;
-    } else {
-        p->sweep_mute = 0;
-    }
-}
-
-void clock_pulse(_pulse* p) {
-    if (p->timer_value == 0) {
-        p->timer_value = p->timer;
-        p->step = (p->step - 1) & 7;
-    } else {
-        p->timer_value--;
-    }
-}
-
-uint8_t sample_pulse(_pulse* p, uint8_t enabled) {
-    uint8_t vol = p->constant_volume ? p->volume_env : p->env;
-
-    uint8_t on = enabled && p->length > 0 &&
-        p->timer >= 8 && !p->sweep_mute && (vol > 0);
-
-    uint8_t bit = (pulse_duty[p->duty] >> p->step) & 1;
-
-    if (on) {
-        p->active = 1;
-    } else if (p->active && bit == 0) {
-        p->active = 0;
-    }
-
-    if (!p->active) return 0;
-    if (!bit) return 0;
-
-    return vol & 0x0F;
-}
-
-void clock_triangle_linear(_triangle* t) {
-    if (t->linear_reload) {
-        t->linear_counter = t->linear_counter_load;
-    } else if (t->linear_counter > 0) {
-        t->linear_counter--;
-    }
-
-    if (!t->counter_control) {
-        t->linear_reload = 0;
-    }
-}
-
-void clock_triangle_length(_triangle* t) {
-    if (!t->counter_control && t->length > 0) {
-        t->length--;
-    }
-}
-
-void clock_triangle(_triangle* t) {
-    if (t->timer < 2) return;
-
-    if (t->timer_value == 0) {
-        t->timer_value = t->timer;
-        if (t->length > 0 && t->linear_counter > 0) {
-            t->seq_step = (t->seq_step + 1) & 31;
-        }
-    } else {
-        t->timer_value--;
-    }
-}
-
-uint8_t sample_triangle(_triangle* t, uint8_t enabled) {
-    uint8_t on = enabled && t->length > 0 &&
-        t->linear_counter > 0 && t->timer >= 2;
-
-    uint8_t value = triangle_seq[t->seq_step];
-
-    if (on) {
-        t->active = 1;
-    } else if (t->active && value == 0) {
-        t->active = 0;
-    }
-
-    if (!t->active) return 0;
-
-    return value;
-}
-
-void clock_noise_envelope(_noise* n) {
-    if (n->env_start) {
-        n->env_start = 0;
-        n->env = 15;
-        n->env_div = n->volume_env;
-    } else {
-        if (n->env_div == 0) {
-            n->env_div = n->volume_env;
-            if (n->env > 0) {
-                n->env--;
-            } else if (n->env_loop) {
-                n->env = 15;
-            }
-        } else {
-            n->env_div--;
-        }
-    }
-}
-
-void clock_noise_length(_noise* n) {
-    if (!n->env_loop && n->length > 0) {
-        n->length--;
-    }
-}
-
-void clock_noise(_noise* n) {
-    if (n->timer_value == 0) {
-        n->timer_value = n->timer;
-
-        uint16_t feedback;
-        if (n->mode) {
-            feedback = ((n->shift_reg & 0x0001) ^ ((n->shift_reg & 0x0040) >> 6));
-        } else {
-            feedback = ((n->shift_reg & 0x0001) ^ ((n->shift_reg & 0x0002) >> 1));
-        }
-
-        n->shift_reg >>= 1;
-        if (feedback) {
-            n->shift_reg |= 0x4000;
-        } else {
-            n->shift_reg &= ~0x4000;
-        }
-    } else {
-        n->timer_value--;
-    }
-}
-
-uint8_t sample_noise(_noise* n, uint8_t enabled) {
-    uint8_t vol = n->constant_volume ? n->volume_env : n->env;
-
-    if (!enabled) return 0;
-    if (n->length == 0) return 0;
-    if (vol == 0) return 0;
-    if (n->shift_reg & 1) return 0;
-
-    return vol & 0x0F;
-}
-
-static void dmc_start_sample(_apu* apu) {
-    _dmc* d = &apu->dmc;
-
-    d->current_address =
-        0xC000u + ((uint16_t)d->sample_address << 6);
-    d->bytes_remaining =
-        ((uint16_t)d->sample_length << 4) + 1;
-}
-
-static void dmc_fill_sample_buffer(_apu* apu) {
-    _dmc* d = &apu->dmc;
-
-    if (d->bytes_remaining == 0) return;
-    if (!d->sample_buffer_empty) return;
-
-    uint8_t b = cpu_read(apu->p_cpu, d->current_address);
-
-    d->sample_buffer       = b;
-    d->sample_buffer_empty = 0;
-
-    d->current_address++;
-    if (d->current_address == 0x0000) {
-        d->current_address = 0x8000;
-    }
-
-    d->bytes_remaining--;
-    if (d->bytes_remaining == 0) {
-        if (d->loop) {
-            dmc_start_sample(apu);
-        } else if (d->irq_enable) {
-            d->irq_pending = 1;
-        }
-    }
-}
-
-void clock_dmc(_apu* apu) {
-    _dmc* d = &apu->dmc;
-
-    if (!apu->status.enable_dmc) return;
-
-    if (d->timer_value == 0) {
-        d->timer_value = d->timer;
-
-        if (!d->silence) {
-            if (d->shift_reg & 1) {
-                if (d->output <= 125) d->output += 2;
-            } else {
-                if (d->output >= 2) d->output -= 2;
-            }
-        }
-
-        d->shift_reg >>= 1;
-        d->bits_remaining--;
-        if (d->bits_remaining == 0) {
-            d->bits_remaining = 8;
-            if (d->sample_buffer_empty) {
-                d->silence = 1;
-            } else {
-                d->silence = 0;
-                d->shift_reg = d->sample_buffer;
-                d->sample_buffer_empty = 1;
-            }
-        }
-
-        dmc_fill_sample_buffer(apu);
-    } else {
-        d->timer_value--;
-    }
-}
-
-uint8_t sample_dmc(_dmc* d, uint8_t enabled) {
-    if (!enabled) return 0;
-    return d->output;
-}
-
-float mix(float pulse1, float pulse2, float triangle, float noise, float dmc) {
-    float pulse_sum = pulse1 + pulse2;
-    float tnd_sum   = triangle / 8227.0f + noise / 12241.0f + dmc / 22638.0f;
-
-    float pulse_out = 0.0f;
-    if (pulse_sum > 0.0f) {
-        pulse_out = 95.88f / (8128.0f / pulse_sum + 100.0f);
-    }
-
-    float tnd_out = 0.0f;
-    if (tnd_sum > 0.0f) {
-        tnd_out = 159.79f / (1.0f / tnd_sum + 100.0f);
-    }
-
-    return pulse_out + tnd_out;
-}
-
 void apu_init(_apu* apu) {
     SDL_AudioSpec spec;
     SDL_zero(spec);
@@ -346,11 +31,6 @@ void apu_deinit(_apu* apu) {
         SDL_DestroyAudioStream(apu->audio_stream);
         apu->audio_stream = NULL;
     }
-}
-
-static inline float release_smooth(float rel, int gate_on) {
-    const float r = 0.995f;
-    return gate_on ? 1.0f : rel * r;
 }
 
 void apu_clock(_apu* apu) {
@@ -527,6 +207,23 @@ void apu_cpu_write(_apu* apu, uint16_t addr, uint8_t data) {
     }
 }
 
+float mix(float pulse1, float pulse2, float triangle, float noise, float dmc) {
+    float pulse_sum = pulse1 + pulse2;
+    float tnd_sum   = triangle / 8227.0f + noise / 12241.0f + dmc / 22638.0f;
+
+    float pulse_out = 0.0f;
+    if (pulse_sum > 0.0f) {
+        pulse_out = 95.88f / (8128.0f / pulse_sum + 100.0f);
+    }
+
+    float tnd_out = 0.0f;
+    if (tnd_sum > 0.0f) {
+        tnd_out = 159.79f / (1.0f / tnd_sum + 100.0f);
+    }
+
+    return pulse_out + tnd_out;
+}
+
 void pulse1_cpu_write(_apu* apu, uint16_t addr, uint8_t data) {
     switch (addr) {
         case 0x4000:
@@ -599,6 +296,122 @@ void pulse2_cpu_write(_apu* apu, uint16_t addr, uint8_t data) {
     }
 }
 
+void clock_envelope(_pulse* p) {
+    if (p->env_start) {
+        p->env_start = 0;
+        p->env = 15;
+        p->env_div = p->volume_env;
+    } else {
+        if (p->env_div == 0) {
+            p->env_div = p->volume_env;
+            if (p->env > 0) {
+                p->env--;
+            } else if (p->env_loop) {
+                p->env = 15;
+            }
+        } else {
+            p->env_div--;
+        }
+    }
+}
+
+void clock_length(_pulse* p) {
+    if (!p->env_loop && p->length > 0) {
+        p->length--;
+    }
+}
+
+static uint16_t sweep_target(_pulse* p, int is_pulse1) {
+    uint16_t t = p->timer;
+    uint16_t delta = t >> p->shift;
+    if (!p->negate) {
+        return t + delta;
+    } else {
+        if (is_pulse1)
+            return t - delta - 1;
+        else
+            return t - delta;
+    }
+}
+
+void clock_sweep(_pulse* p, int is_pulse1) {
+    if (!p->sweep_enable || p->shift == 0) {
+        p->sweep_mute = 0;
+        return;
+    }
+
+    if (p->sweep_reload) {
+        p->sweep_reload = 0;
+        p->sweep_div = p->period;
+    } else {
+        if (p->sweep_div > 0) {
+            p->sweep_div--;
+        } else {
+            p->sweep_div = p->period;
+            uint16_t target = sweep_target(p, is_pulse1);
+            if (target <= 0x7FF && p->timer >= 8) {
+                p->timer = target;
+            }
+        }
+    }
+
+    uint16_t target = sweep_target(p, is_pulse1);
+    if (target > 0x7FF) {
+        p->sweep_mute = 1;
+    } else {
+        p->sweep_mute = 0;
+    }
+}
+
+void clock_pulse(_pulse* p) {
+    if (p->timer_value == 0) {
+        p->timer_value = p->timer;
+        p->step = (p->step - 1) & 7;
+    } else {
+        p->timer_value--;
+    }
+}
+
+uint8_t sample_pulse(_pulse* p, uint8_t enabled) {
+    uint8_t vol = p->constant_volume ? p->volume_env : p->env;
+
+    uint8_t on = enabled && p->length > 0 &&
+        p->timer >= 8 && !p->sweep_mute && (vol > 0);
+
+    uint8_t bit = (pulse_duty[p->duty] >> p->step) & 1;
+
+    if (on) {
+        p->active = 1;
+    } else if (p->active && bit == 0) {
+        p->active = 0;
+    }
+
+    if (!p->active) return 0;
+    if (!bit) return 0;
+
+    return vol & 0x0F;
+}
+
+#define FC_PERIOD 29830
+#define FC_STEP1  3729
+#define FC_STEP2  7457
+#define FC_STEP3  11186
+#define FC_STEP4  14916
+
+void clock_frame_counter(_apu* apu) {
+    apu->frame_cycle++;
+    int c = apu->frame_cycle;
+
+    if (c == FC_STEP1 || c == FC_STEP2 || c == FC_STEP3 || c == FC_STEP4) {
+        clock_envelope(&apu->pulse1);
+        clock_envelope(&apu->pulse2);
+    }
+
+    if (apu->frame_cycle >= FC_PERIOD) {
+        apu->frame_cycle -= FC_PERIOD;
+    }
+}
+
 void triangle_cpu_write(_apu* apu, uint16_t addr, uint8_t data) {
     switch (addr) {
         case 0x4008:
@@ -623,6 +436,54 @@ void triangle_cpu_write(_apu* apu, uint16_t addr, uint8_t data) {
 
         default: break;
     }
+}
+
+void clock_triangle_linear(_triangle* t) {
+    if (t->linear_reload) {
+        t->linear_counter = t->linear_counter_load;
+    } else if (t->linear_counter > 0) {
+        t->linear_counter--;
+    }
+
+    if (!t->counter_control) {
+        t->linear_reload = 0;
+    }
+}
+
+void clock_triangle_length(_triangle* t) {
+    if (!t->counter_control && t->length > 0) {
+        t->length--;
+    }
+}
+
+void clock_triangle(_triangle* t) {
+    if (t->timer < 2) return;
+
+    if (t->timer_value == 0) {
+        t->timer_value = t->timer;
+        if (t->length > 0 && t->linear_counter > 0) {
+            t->seq_step = (t->seq_step + 1) & 31;
+        }
+    } else {
+        t->timer_value--;
+    }
+}
+
+uint8_t sample_triangle(_triangle* t, uint8_t enabled) {
+    uint8_t on = enabled && t->length > 0 &&
+        t->linear_counter > 0 && t->timer >= 2;
+
+    uint8_t value = triangle_seq[t->seq_step];
+
+    if (on) {
+        t->active = 1;
+    } else if (t->active && value == 0) {
+        t->active = 0;
+    }
+
+    if (!t->active) return 0;
+
+    return value;
 }
 
 void noise_cpu_write(_apu* apu, uint16_t addr, uint8_t data) {
@@ -650,6 +511,64 @@ void noise_cpu_write(_apu* apu, uint16_t addr, uint8_t data) {
     }
 }
 
+void clock_noise_envelope(_noise* n) {
+    if (n->env_start) {
+        n->env_start = 0;
+        n->env = 15;
+        n->env_div = n->volume_env;
+    } else {
+        if (n->env_div == 0) {
+            n->env_div = n->volume_env;
+            if (n->env > 0) {
+                n->env--;
+            } else if (n->env_loop) {
+                n->env = 15;
+            }
+        } else {
+            n->env_div--;
+        }
+    }
+}
+
+void clock_noise_length(_noise* n) {
+    if (!n->env_loop && n->length > 0) {
+        n->length--;
+    }
+}
+
+void clock_noise(_noise* n) {
+    if (n->timer_value == 0) {
+        n->timer_value = n->timer;
+
+        uint16_t feedback;
+        if (n->mode) {
+            feedback = ((n->shift_reg & 0x0001) ^ ((n->shift_reg & 0x0040) >> 6));
+        } else {
+            feedback = ((n->shift_reg & 0x0001) ^ ((n->shift_reg & 0x0002) >> 1));
+        }
+
+        n->shift_reg >>= 1;
+        if (feedback) {
+            n->shift_reg |= 0x4000;
+        } else {
+            n->shift_reg &= ~0x4000;
+        }
+    } else {
+        n->timer_value--;
+    }
+}
+
+uint8_t sample_noise(_noise* n, uint8_t enabled) {
+    uint8_t vol = n->constant_volume ? n->volume_env : n->env;
+
+    if (!enabled) return 0;
+    if (n->length == 0) return 0;
+    if (vol == 0) return 0;
+    if (n->shift_reg & 1) return 0;
+
+    return vol & 0x0F;
+}
+
 void dmc_cpu_write(_apu* apu, uint16_t addr, uint8_t data) {
     switch (addr) {
         case 0x4010:
@@ -674,4 +593,79 @@ void dmc_cpu_write(_apu* apu, uint16_t addr, uint8_t data) {
 
         default: break;
     }
+}
+
+static void dmc_start_sample(_apu* apu) {
+    _dmc* d = &apu->dmc;
+
+    d->current_address =
+        0xC000u + ((uint16_t)d->sample_address << 6);
+    d->bytes_remaining =
+        ((uint16_t)d->sample_length << 4) + 1;
+}
+
+static void dmc_fill_sample_buffer(_apu* apu) {
+    _dmc* d = &apu->dmc;
+
+    if (d->bytes_remaining == 0) return;
+    if (!d->sample_buffer_empty) return;
+
+    uint8_t b = cpu_read(apu->p_cpu, d->current_address);
+
+    d->sample_buffer       = b;
+    d->sample_buffer_empty = 0;
+
+    d->current_address++;
+    if (d->current_address == 0x0000) {
+        d->current_address = 0x8000;
+    }
+
+    d->bytes_remaining--;
+    if (d->bytes_remaining == 0) {
+        if (d->loop) {
+            dmc_start_sample(apu);
+        } else if (d->irq_enable) {
+            d->irq_pending = 1;
+        }
+    }
+}
+
+void clock_dmc(_apu* apu) {
+    _dmc* d = &apu->dmc;
+
+    if (!apu->status.enable_dmc) return;
+
+    if (d->timer_value == 0) {
+        d->timer_value = d->timer;
+
+        if (!d->silence) {
+            if (d->shift_reg & 1) {
+                if (d->output <= 125) d->output += 2;
+            } else {
+                if (d->output >= 2) d->output -= 2;
+            }
+        }
+
+        d->shift_reg >>= 1;
+        d->bits_remaining--;
+        if (d->bits_remaining == 0) {
+            d->bits_remaining = 8;
+            if (d->sample_buffer_empty) {
+                d->silence = 1;
+            } else {
+                d->silence = 0;
+                d->shift_reg = d->sample_buffer;
+                d->sample_buffer_empty = 1;
+            }
+        }
+
+        dmc_fill_sample_buffer(apu);
+    } else {
+        d->timer_value--;
+    }
+}
+
+uint8_t sample_dmc(_dmc* d, uint8_t enabled) {
+    if (!enabled) return 0;
+    return d->output;
 }
