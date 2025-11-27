@@ -610,6 +610,7 @@ uint8_t op_lxa(_cpu* cpu) {
 }
 
 uint8_t op_nop(_cpu* cpu) {
+    (void)cpu;
 	return 1;
 }
 
