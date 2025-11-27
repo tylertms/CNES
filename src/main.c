@@ -67,17 +67,18 @@ int main(int argc, char **argv) {
                 break;
 
             case SDL_EVENT_KEY_DOWN:
-                switch (event.key.scancode) {
-                case SDL_SCANCODE_BACKSPACE:
+                if (event.key.scancode == SDL_SCANCODE_BACKSPACE) {
                     cpu_reset(&nes.cpu);
-                    break;
-                default:
-                    break;
+                } else {
+                    SDL_HideCursor();
                 }
                 break;
 
-            default:
+            case SDL_EVENT_MOUSE_MOTION:
+                SDL_ShowCursor();
                 break;
+
+            default: break;
             }
         }
 
