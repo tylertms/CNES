@@ -1,5 +1,6 @@
 CompileFlags:
   Add:
     - -I../build/_deps/sdl3-src/include
-    - -I../external
+    - -I../external/glad/include
     - -I../external/imgui
+    - -I../external/fonts
