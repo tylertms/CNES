@@ -57,10 +57,10 @@ jobs:
           msystem: ${{ matrix.msystem }}
           update: true
           install: >
-            mingw-w64-${{ matrix.pksuffix || matrix.pkgsuffix }}-gcc
-            mingw-w64-${{ matrix.pksuffix || matrix.pkgsuffix }}-cmake
-            mingw-w64-${{ matrix.pksuffix || matrix.pkgsuffix }}-ninja
-            mingw-w64-${{ matrix.pksuffix || matrix.pkgsuffix }}-pkg-config
+            mingw-w64-${{ matrix.pkgsuffix }}-gcc
+            mingw-w64-${{ matrix.pkgsuffix }}-cmake
+            mingw-w64-${{ matrix.pkgsuffix }}-ninja
+            mingw-w64-${{ matrix.pkgsuffix }}-pkg-config
 
       - name: Cache SDL3
         uses: actions/cache@v4
@@ -111,15 +111,33 @@ jobs:
         run: |
           cmake --build build --parallel
 
+      - name: Package (MacOS/Linux)
+        if: matrix.os != 'windows-latest'
+        run: |
+          mkdir -p dist
+          if [ -f build/cnes ]; then
+            cp build/cnes dist/cnes-${{ matrix.artifact }}
+          else
+            cp build/Release/cnes dist/cnes-${{ matrix.artifact }} || true
+          fi
+
+      - name: Package (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: msys2 {0}
+        run: |
+          mkdir -p dist
+          if [ -f build/cnes.exe ]; then
+            cp build/cnes.exe dist/cnes-${{ matrix.artifact }}.exe
+          else
+            cp build/Release/cnes.exe dist/cnes-${{ matrix.artifact }}.exe || true
+          fi
+
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: cnes-${{ matrix.artifact }}
-          path: |
-            build/cnes*
-            build/*.exe
-            build/Release/*.exe
-          if-no-files-found: ignore
+          path: dist/*
+          if-no-files-found: error
 
   release:
     name: Create GitHub Release
