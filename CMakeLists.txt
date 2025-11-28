@@ -29,22 +29,34 @@ add_executable(cnes
 set_property(TARGET cnes PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
 set(CMAKE_OPTIMIZE_DEPENDENCIES_RELEASE TRUE)
 
-target_compile_options(cnes PRIVATE
-    -Wall
-    -Wpedantic
-    $<$<CONFIG:Debug>:-O2>
-    $<$<CONFIG:Debug>:-g>
-    $<$<CONFIG:Debug>:-fno-omit-frame-pointer>
-    $<$<CONFIG:Debug>:-fno-optimize-sibling-calls>
-    $<$<CONFIG:Debug>:-DNES_PROFILING=1>
-    $<$<CONFIG:Debug>:-pg>
-    $<$<CONFIG:Release>:-O3>
-    $<$<CONFIG:Release>:-DNDEBUG>
-    $<$<CONFIG:Release>:-march=native>
-    $<$<CONFIG:Release>:-mtune=native>
-    $<$<CONFIG:Release>:-fstrict-aliasing>
-    $<$<CONFIG:Release>:-ffast-math>
-)
+if (MSVC)
+    target_compile_options(cnes PRIVATE
+        /W4
+        $<$<CONFIG:Debug>:/Od>
+        $<$<CONFIG:Debug>:/Zi>
+        $<$<CONFIG:Debug>:/MDd>
+        $<$<CONFIG:Release>:/O2>
+        $<$<CONFIG:Release>:/MD>
+    )
+else()
+    target_compile_options(cnes PRIVATE
+        -Wall
+        -Wextra
+        -Wpedantic
+        $<$<CONFIG:Debug>:-O2>
+        $<$<CONFIG:Debug>:-g>
+        $<$<CONFIG:Debug>:-fno-omit-frame-pointer>
+        $<$<CONFIG:Debug>:-fno-optimize-sibling-calls>
+        $<$<CONFIG:Debug>:-DNES_PROFILING=1>
+        $<$<CONFIG:Debug>:-pg>
+        $<$<CONFIG:Release>:-O3>
+        $<$<CONFIG:Release>:-DNDEBUG>
+        $<$<CONFIG:Release>:-march=native>
+        $<$<CONFIG:Release>:-mtune=native>
+        $<$<CONFIG:Release>:-fstrict-aliasing>
+        $<$<CONFIG:Release>:-ffast-math>
+    )
+endif()
 
 target_link_options(cnes PRIVATE
     $<$<CONFIG:Debug>:-pg>
