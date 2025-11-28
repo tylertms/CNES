@@ -5,7 +5,48 @@
 #include <stdbool.h>
 #include <SDL3/SDL.h>
 
+static inline void print_build_info(void) {
+    printf("cnes build info:\n");
+
+#ifdef CMAKE_BUILD_TYPE_STR
+    printf("  CMAKE_BUILD_TYPE = %s\n", CMAKE_BUILD_TYPE_STR);
+#else
+    printf("  CMAKE_BUILD_TYPE = (not defined)\n");
+#endif
+
+#ifdef NDEBUG
+    printf("  NDEBUG = 1\n");
+#else
+    printf("  NDEBUG = 0\n");
+#endif
+
+#ifdef __OPTIMIZE__
+    printf("  __OPTIMIZE__ = 1\n");
+#else
+    printf("  __OPTIMIZE__ = 0\n");
+#endif
+
+#ifdef __SANITIZE_ADDRESS__
+    printf("  __SANITIZE_ADDRESS__ = 1\n");
+#else
+    printf("  __SANITIZE_ADDRESS__ = 0\n");
+#endif
+
+#ifdef __clang__
+    printf("  compiler = clang %d.%d.%d\n",
+           __clang_major__, __clang_minor__, __clang_patchlevel__);
+#elif defined(__GNUC__)
+    printf("  compiler = gcc %d.%d.%d\n",
+           __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__);
+#else
+    printf("  compiler = (unknown)\n");
+#endif
+}
+
+
 int main(int argc, char **argv) {
+    print_build_info();
+
     if (argc <= 1) {
         printf("Usage: %s <file.nes>\n", argv[0]);
         return 1;

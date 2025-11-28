@@ -108,6 +108,10 @@ target_link_options(cnes PRIVATE
     $<$<CONFIG:Release>:-flto>
 )
 
+target_compile_definitions(cnes PRIVATE
+    CMAKE_BUILD_TYPE_STR="$<CONFIG>"
+)
+
 
 file(GLOB IMGUI_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/*.cpp
