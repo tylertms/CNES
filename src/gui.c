@@ -1,299 +1,271 @@
 #include "gui.h"
+#include "SDL3/SDL_gpu.h"
+#include "dcimgui.h"
 #include "ppu.h"
+
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 
-static SDL_GLContext create_best_gl_context(SDL_Window* w) {
-    static const struct {
-        uint8_t v_major, v_minor;
-    } list[] = {
-        {4,6}, {4,5}, {4,4}, {4,3}, {4,2}, {4,1}, {4,0}, {3,3}, {3,2}
+#include "nes_vert_spv.h"
+#include "nes_frag_spv.h"
+#include "nes_vert_msl.h"
+#include "nes_frag_msl.h"
+
+
+#define FRAME_HISTORY 120
+
+static float g_frame_times[FRAME_HISTORY];
+static int g_frame_times_index = 0;
+static bool g_frame_times_filled = false;
+static uint64_t g_last_perf_counter = 0;
+
+static void record_frame_time(uint64_t frame_end) {
+    uint64_t freq = SDL_GetPerformanceFrequency();
+    if (g_last_perf_counter != 0 && freq != 0) {
+        double dt_ms = (double)(frame_end - g_last_perf_counter) * 1000.0 / (double)freq;
+        g_frame_times[g_frame_times_index] = (float)dt_ms;
+
+        g_frame_times_index = (g_frame_times_index + 1) % FRAME_HISTORY;
+        if (g_frame_times_index == 0)
+            g_frame_times_filled = true;
+    }
+    g_last_perf_counter = frame_end;
+}
+
+static bool configure_present_mode(_gui *gui) {
+    const SDL_GPUSwapchainComposition comp = SDL_GPU_SWAPCHAINCOMPOSITION_SDR;
+
+    const SDL_GPUPresentMode modes[] = {
+        SDL_GPU_PRESENTMODE_MAILBOX,
+        SDL_GPU_PRESENTMODE_VSYNC,
+        SDL_GPU_PRESENTMODE_IMMEDIATE
+    };
+    const size_t num_modes = sizeof(modes) / sizeof(modes[0]);
+
+    for (size_t i = 0; i < num_modes; ++i) {
+        SDL_GPUPresentMode mode = modes[i];
+
+        if (!SDL_WindowSupportsGPUPresentMode(gui->gpu_device, gui->window, mode)) {
+            continue;
+        }
+
+        if (SDL_SetGPUSwapchainParameters(gui->gpu_device, gui->window, comp, mode)) {
+            SDL_Log("Using present mode %d (0=VSYNC, 1=IMMEDIATE, 2=MAILBOX)", (int)mode);
+            return true;
+        }
+    }
+
+    SDL_Log("Warning: Failed to set preferred present modes, keeping default swapchain parameters!");
+    return false;
+}
+
+static bool create_texture(_gui *gui) {
+    const SDL_GPUTextureCreateInfo tinfo = {
+        .type = SDL_GPU_TEXTURETYPE_2D,
+        .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+        .width = NES_W,
+        .height = NES_H,
+        .layer_count_or_depth = 1,
+        .num_levels = 1,
+        .sample_count = SDL_GPU_SAMPLECOUNT_1,
+        .usage = SDL_GPU_TEXTUREUSAGE_SAMPLER,
     };
 
-    int32_t num = (int32_t)(sizeof(list) / sizeof(list[0]));
-    for (int32_t i = 0; i < num; i++) {
-        uint8_t v_major = list[i].v_major;
-        uint8_t v_minor = list[i].v_minor;
-
-#ifdef __APPLE__
-        if (v_major > 4 || (v_major == 4 && v_minor > 1)) continue;
-#endif
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, v_major);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, v_minor);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-#ifdef __APPLE__
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
-#else
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
-#endif
-
-        SDL_GLContext ctx = SDL_GL_CreateContext(w);
-        if (ctx) return ctx;
-    }
-    return NULL;
-}
-
-static void detect_glsl_version(char* out, size_t size) {
-    int32_t v_major = 0, v_minor = 0;
-    glGetIntegerv(GL_MAJOR_VERSION, &v_major);
-    glGetIntegerv(GL_MINOR_VERSION, &v_minor);
-
-    if (!v_major && !v_minor) {
-        const char* ver = (const char* )glGetString(GL_VERSION);
-        if (!ver || sscanf(ver, "%d.%d", &v_major, &v_minor) != 2) {
-            v_major = 2;
-            v_minor = 1;
-        }
+    gui->nes_texture = SDL_CreateGPUTexture(gui->gpu_device, &tinfo);
+    if (!gui->nes_texture) {
+        SDL_Log("SDL_CreateGPUTexture failed: %s", SDL_GetError());
+        return false;
     }
 
-    printf("Using OpenGL Version %d.%d\n", v_major, v_minor);
-
-    uint32_t glsl = 150;
-    if (v_major == 2) {
-        glsl = (v_minor == 0) ? 110 : 120;
-    } else if (v_major == 3) {
-        glsl = (v_minor == 0) ? 130 : (v_minor == 1 ? 140 : 150);
-    } else if (v_major == 4) {
-        if (v_minor == 0) glsl = 400;
-        else if (v_minor == 1) glsl = 410;
-        else if (v_minor == 2) glsl = 420;
-        else if (v_minor == 3) glsl = 430;
-        else if (v_minor == 4) glsl = 440;
-        else if (v_minor == 5) glsl = 450;
-        else glsl = 460;
-    }
-
-    snprintf(out, size, "#version %d", glsl);
-}
-
-static uint32_t compile_shader(GLenum type, const char* src) {
-    uint32_t shader = glCreateShader(type);
-    glShaderSource(shader, 1, &src, NULL);
-    glCompileShader(shader);
-
-    int32_t result = 0;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
-
-    if (!result) {
-        int32_t len = 0;
-        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &len);
-
-        if (len > 0) {
-            char buf[512];
-            glGetShaderInfoLog(shader, sizeof(buf), NULL, buf);
-            printf("ERROR: Failed to compile shader: %s", buf);
-        }
-
-        glDeleteShader(shader);
-        return 0;
-    }
-
-    return shader;
-}
-
-static uint32_t link_program(uint32_t vertex, uint32_t frag) {
-    uint32_t program = glCreateProgram();
-
-    glAttachShader(program, vertex);
-    glAttachShader(program, frag);
-    glBindAttribLocation(program, 0, "pos");
-    glBindAttribLocation(program, 1, "uv");
-    glLinkProgram(program);
-
-    int32_t result = 0;
-    glGetProgramiv(program, GL_LINK_STATUS, &result);
-
-    if (!result) {
-        int32_t len = 0;
-        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &len);
-
-        if (len > 0) {
-            char buf[512];
-            glGetProgramInfoLog(program, sizeof(buf), NULL, buf);
-            printf("ERROR: Failed to link program: %s", buf);
-        }
-
-        glDeleteProgram(program);
-        return 0;
-    }
-
-    return program;
-}
-
-static uint32_t program_init(_gui* gui) {
-    char vertex_buf[1024], frag_buf[1024];
-    snprintf(vertex_buf, sizeof(vertex_buf), "%s\n%s", gui->glsl_version, vertex_source);
-    snprintf(frag_buf, sizeof(frag_buf), "%s\n%s", gui->glsl_version, frag_source);
-
-    uint32_t vertex_shader = compile_shader(GL_VERTEX_SHADER, vertex_buf);
-    if (!vertex_shader) {
-        return 1;
-    }
-
-    uint32_t frag_shader = compile_shader(GL_FRAGMENT_SHADER, frag_buf);
-    if (!frag_shader) {
-        glDeleteShader(vertex_shader);
-        return 1;
-    }
-
-    gui->program = link_program(vertex_shader, frag_shader);
-    glDeleteShader(vertex_shader);
-    glDeleteShader(frag_shader);
-    if (!gui->program) {
-        return 1;
-    }
-
-    float verts[] = {
-        -1.f, -1.f, 0.f, 0.f,
-         1.f, -1.f, 1.f, 0.f,
-         1.f,  1.f, 1.f, 1.f,
-        -1.f,  1.f, 0.f, 1.f
+    const SDL_GPUTransferBufferCreateInfo transfer_buffer = {
+        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+        .size = NES_PIXELS * sizeof(uint32_t),
     };
 
-    glGenVertexArrays(1, &gui->vao);
-    glGenBuffers(1, &gui->vbo);
+    gui->nes_transfer = SDL_CreateGPUTransferBuffer(gui->gpu_device, &transfer_buffer);
+    if (!gui->nes_transfer) {
+        SDL_Log("SDL_CreateGPUTransferBuffer failed: %s", SDL_GetError());
+        return false;
+    }
 
-    glBindVertexArray(gui->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, gui->vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
+    const SDL_GPUSamplerCreateInfo sampler_create_info = {
+        .min_filter = SDL_GPU_FILTER_NEAREST,
+        .mag_filter = SDL_GPU_FILTER_NEAREST,
+        .mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
+        .address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+        .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+        .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+    };
 
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+    gui->nes_sampler = SDL_CreateGPUSampler(gui->gpu_device, &sampler_create_info);
+    if (!gui->nes_sampler) {
+        SDL_Log("ERROR: SDL_CreateGPUSampler failed: %s", SDL_GetError());
+        return false;
+    }
 
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-
-    return 0;
+    return true;
 }
 
-uint8_t gui_init(_gui* gui, char* file) {
-    memset(gui, 0, sizeof(_gui));
+static bool create_pipeline(_gui *gui) {
+    SDL_GPUShaderFormat supported = SDL_GetGPUShaderFormats(gui->gpu_device);
+    SDL_GPUShaderFormat fmt = 0;
 
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
-        SDL_Log("SDL_Init failed: %s", SDL_GetError());
-        return 1;
+    if (supported & SDL_GPU_SHADERFORMAT_SPIRV) {
+        fmt = SDL_GPU_SHADERFORMAT_SPIRV;
+    } else if (supported & SDL_GPU_SHADERFORMAT_MSL) {
+        fmt = SDL_GPU_SHADERFORMAT_MSL;
+    } else {
+        SDL_Log("ERROR: No supported shader format (SPIR-V/MSL) available");
+        return false;
     }
 
-    SDL_SetHint(SDL_HINT_TIMER_RESOLUTION, "1");
+    const uint8_t *vs_code = NULL;
+    const uint8_t *fs_code = NULL;
+    size_t vs_size = 0;
+    size_t fs_size = 0;
 
-    char title[128];
-    snprintf(title, sizeof(title), "cnes - %s", file);
-
-    gui->window = SDL_CreateWindow(
-        title, 256 * 3, 240 * 3,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE
-    );
-
-    if (!gui->window) {
-        SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
-        return 1;
+    if (fmt == SDL_GPU_SHADERFORMAT_SPIRV) {
+        vs_code = (const uint8_t *)nes_vert_spv;
+        vs_size = (size_t)nes_vert_spv_len;
+        fs_code = (const uint8_t *)nes_frag_spv;
+        fs_size = (size_t)nes_frag_spv_len;
+    } else {
+        vs_code = (const uint8_t *)nes_vert_msl;
+        vs_size = (size_t)nes_vert_msl_len;
+        fs_code = (const uint8_t *)nes_frag_msl;
+        fs_size = (size_t)nes_frag_msl_len;
     }
 
-    gui->gl_ctx = create_best_gl_context(gui->window);
-    if (!gui->gl_ctx) {
-        SDL_Log("Failed to create any OpenGL context: %s", SDL_GetError());
-        return 1;
+    const char *entry = (fmt == SDL_GPU_SHADERFORMAT_MSL) ? "main0" : "main";
+
+    const SDL_GPUShaderCreateInfo vs_info = {
+        .stage = SDL_GPU_SHADERSTAGE_VERTEX,
+        .format = fmt,
+        .code = vs_code,
+        .code_size = vs_size,
+        .entrypoint = entry,
+    };
+
+    gui->nes_vs = SDL_CreateGPUShader(gui->gpu_device, &vs_info);
+    if (!gui->nes_vs) {
+        SDL_Log("ERROR: SDL_CreateGPUShader (vertex) failed: %s", SDL_GetError());
+        return false;
     }
 
-    SDL_GL_MakeCurrent(gui->window, gui->gl_ctx);
-    if (SDL_GL_SetSwapInterval(-1)) {
-        printf("INFO: Using Adaptive Sync\n");
-    } else if (SDL_GL_SetSwapInterval(1)) {
-        printf("INFO: Using VSync\n");
-    } else if (SDL_GL_SetSwapInterval(0)) {
-        printf("INFO: Using No VSync\n");
+    const SDL_GPUShaderCreateInfo fs_info = {
+        .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
+        .format = fmt,
+        .code = fs_code,
+        .code_size = fs_size,
+        .entrypoint = entry,
+        .num_samplers = 1,
+    };
+
+    gui->nes_fs = SDL_CreateGPUShader(gui->gpu_device, &fs_info);
+    if (!gui->nes_fs) {
+        SDL_Log("ERROR: SDL_CreateGPUShader (fragment) failed: %s", SDL_GetError());
+        return false;
     }
 
-    if (!gladLoadGL((GLADloadfunc)SDL_GL_GetProcAddress)) {
-        SDL_Log("Failed to initialize GLAD");
-        return 1;
+    const SDL_GPUVertexInputState vin = {0};
+
+    const SDL_GPURasterizerState rs = {
+        .fill_mode = SDL_GPU_FILLMODE_FILL,
+        .cull_mode = SDL_GPU_CULLMODE_NONE,
+        .front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE,
+    };
+
+    const SDL_GPUMultisampleState ms = {
+        .sample_count = SDL_GPU_SAMPLECOUNT_1,
+    };
+
+    const SDL_GPUDepthStencilState ds = {0};
+
+    const SDL_GPUColorTargetDescription ctd = {
+        .format = SDL_GetGPUSwapchainTextureFormat(gui->gpu_device, gui->window),
+    };
+
+    const SDL_GPUGraphicsPipelineTargetInfo ti = {
+        .num_color_targets = 1,
+        .color_target_descriptions = &ctd,
+    };
+
+    const SDL_GPUGraphicsPipelineCreateInfo pi = {
+        .vertex_shader = gui->nes_vs,
+        .fragment_shader = gui->nes_fs,
+        .vertex_input_state = vin,
+        .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP,
+        .rasterizer_state = rs,
+        .multisample_state = ms,
+        .depth_stencil_state = ds,
+        .target_info = ti,
+        .props = 0,
+    };
+
+    gui->nes_pipeline = SDL_CreateGPUGraphicsPipeline(gui->gpu_device, &pi);
+    if (!gui->nes_pipeline) {
+        SDL_Log("ERROR: SDL_CreateGPUGraphicsPipeline failed: %s", SDL_GetError());
+        return false;
     }
 
-    detect_glsl_version(gui->glsl_version, sizeof(gui->glsl_version));
-
-    if (program_init(gui)) {
-        SDL_Log("Failed to init program");
-        return 1;
-    }
-
-    glGenTextures(1, &gui->nes_texture);
-    glBindTexture(GL_TEXTURE_2D, gui->nes_texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, NES_W, NES_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    gui->pixels = SDL_calloc(NES_PIXELS, sizeof(uint32_t));
-    if (!gui->pixels) {
-        SDL_Log("Failed to allocate pixel buffer");
-        return 1;
-    }
-
-    CIMGUI_CHECKVERSION();
-    gui->im_ctx = ImGui_CreateContext(NULL);
-    ImGui_SetCurrentContext(gui->im_ctx);
-
-    ImGuiIO* io = ImGui_GetIO();
-    io->ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
-    io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    io->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
-
-    cImGui_ImplSDL3_InitForOpenGL(gui->window, gui->gl_ctx);
-    cImGui_ImplOpenGL3_InitEx(gui->glsl_version);
-
-    return 0;
+    return true;
 }
 
-void set_pixel(_gui* gui, uint16_t x, uint16_t y, uint32_t color) {
-    if (!gui->pixels) return;
-    if (x < NES_W && y < NES_H) gui->pixels[y * NES_W + x] = color;
+static void upload_texture(_gui *gui, SDL_GPUCommandBuffer *cmdbuf) {
+    if (!gui || !gui->pixels || !gui->nes_transfer || !gui->nes_texture) {
+        return;
+    }
+
+    uint32_t *dst = (uint32_t *)SDL_MapGPUTransferBuffer(gui->gpu_device, gui->nes_transfer, true);
+    if (!dst) {
+        return;
+    }
+
+    memcpy(dst, gui->pixels, NES_PIXELS * sizeof(uint32_t));
+    SDL_UnmapGPUTransferBuffer(gui->gpu_device, gui->nes_transfer);
+
+    SDL_GPUCopyPass *copy = SDL_BeginGPUCopyPass(cmdbuf);
+    if (!copy) {
+        return;
+    }
+
+    const SDL_GPUTextureTransferInfo xfer = {
+        .transfer_buffer = gui->nes_transfer,
+        .offset = 0,
+        .pixels_per_row = NES_W,
+        .rows_per_layer = NES_H,
+    };
+
+    const SDL_GPUTextureRegion region = {
+        .texture = gui->nes_texture,
+        .mip_level = 0,
+        .layer = 0,
+        .x = 0,
+        .y = 0,
+        .z = 0,
+        .w = NES_W,
+        .h = NES_H,
+        .d = 1,
+    };
+
+    SDL_UploadToGPUTexture(copy, &xfer, &region, true);
+    SDL_EndGPUCopyPass(copy);
 }
 
-static void draw_nes_texture(_gui* gui) {
-    glBindTexture(GL_TEXTURE_2D, gui->nes_texture);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, NES_W, NES_H, GL_RGBA, GL_UNSIGNED_BYTE, gui->pixels);
-
-    int32_t width, height;
-    SDL_GetWindowSize(gui->window, &width, &height);
-    glViewport(0, 0, width, height);
-    glClearColor(0.f, 0.f, 0.f, 1.f);
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    glUseProgram(gui->program);
-    int32_t location = glGetUniformLocation(gui->program, "u_tex");
-    glUniform1i(location, 0);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, gui->nes_texture);
-
-    glBindVertexArray(gui->vao);
-    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-    glBindVertexArray(0);
-
-    glBindTexture(GL_TEXTURE_2D, 0);
-}
-
-uint64_t gui_draw(_gui* gui) {
-    if (!gui || !gui->window || !gui->gl_ctx) return 0;
-
-    SDL_GL_MakeCurrent(gui->window, gui->gl_ctx);
-
-    cImGui_ImplSDL3_NewFrame();
-    cImGui_ImplOpenGL3_NewFrame();
-    ImGui_NewFrame();
-
+static void draw_main_menu(_gui *gui, _nes *nes) {
     if (ImGui_BeginMainMenuBar()) {
         if (ImGui_BeginMenu("File")) {
+            if (ImGui_MenuItem("Reset")) {
+                nes_reset(nes);
+            }
             if (ImGui_MenuItem("Settings")) {
                 gui->show_settings = true;
             }
-
-            if (ImGui_MenuItemWithIconEx("Quit", "X", "Ctrl-Q", false, true)) {
-                gui->quit = true;
+            if (ImGui_MenuItem("Quit")) {
+                nes->cpu.halt = 1;
             }
-
             ImGui_EndMenu();
         }
         if (ImGui_BeginMenu("View")) {
@@ -301,38 +273,189 @@ uint64_t gui_draw(_gui* gui) {
         }
         ImGui_EndMainMenuBar();
     }
+}
 
-    if (gui->show_settings) {
-        if (ImGui_Begin("Settings", &gui->show_settings, 0)) {
-            ImGui_Text("Settings");
+static void draw_settings_window(_gui *gui) {
+    if (!gui->show_settings) return;
+
+    if (ImGui_Begin("Settings", &gui->show_settings, 0)) {
+        ImGui_Text("Settings");
+
+        int count = g_frame_times_filled ? FRAME_HISTORY : g_frame_times_index;
+        if (count > 0) {
+            ImVec2 size = { 160.0f, 40.0f };
+            ImGui_PlotLinesEx(
+                "Frame time (ms)",
+                g_frame_times, count,
+                g_frame_times_filled ? g_frame_times_index : 0,
+                NULL, NES_FRAME_TIME * 1000.0 - 2, NES_FRAME_TIME * 1000.0 + 2,
+                size, sizeof(float)
+            );
         }
-        ImGui_End();
+    }
+    ImGui_End();
+}
+
+uint8_t gui_init(_gui *gui, char *file) {
+    memset(gui, 0, sizeof(_gui));
+
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_EVENTS)) {
+        SDL_Log("ERROR: SDL_Init failed: %s", SDL_GetError());
+        return 1;
     }
 
+    SDL_SetHint(SDL_HINT_TIMER_RESOLUTION, "1");
+
+    char title[128];
+    snprintf(title, sizeof(title), "cnes - %s", file ? file : "");
+
+    gui->window = SDL_CreateWindow(title, NES_W * 3, NES_H * 3, SDL_WINDOW_RESIZABLE);
+    if (!gui->window) {
+        SDL_Log("ERROR: SDL_CreateWindow failed: %s", SDL_GetError());
+        gui_deinit(gui);
+        return 1;
+    }
+
+    gui->gpu_device = SDL_CreateGPUDevice(
+        SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_MSL,
+        false, NULL
+    );
+
+    if (!gui->gpu_device) {
+        SDL_Log("ERROR: SDL_CreateGPUDevice failed: %s", SDL_GetError());
+        gui_deinit(gui);
+        return 1;
+    }
+
+    if (!SDL_ClaimWindowForGPUDevice(gui->gpu_device, gui->window)) {
+        SDL_Log("ERROR: SDL_ClaimWindowForGPUDevice failed: %s", SDL_GetError());
+        gui_deinit(gui);
+        return 1;
+    }
+
+    configure_present_mode(gui);
+
+    if (!create_texture(gui)) {
+        gui_deinit(gui);
+        return 1;
+    }
+
+    if (!create_pipeline(gui)) {
+        gui_deinit(gui);
+        return 1;
+    }
+
+    gui->pixels = (uint32_t *)SDL_calloc(NES_PIXELS, sizeof(uint32_t));
+    if (!gui->pixels) {
+        SDL_Log("ERROR: Failed to allocate pixel buffer");
+        gui_deinit(gui);
+        return 1;
+    }
+
+    CIMGUI_CHECKVERSION();
+    gui->im_ctx = ImGui_CreateContext(NULL);
+    ImGui_SetCurrentContext(gui->im_ctx);
+
+    ImGuiIO *io = ImGui_GetIO();
+    io->ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+    io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    io->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+
+    cImGui_ImplSDL3_InitForSDLGPU(gui->window);
+
+    ImGui_ImplSDLGPU3_InitInfo init_info;
+    SDL_zero(init_info);
+    init_info.Device = gui->gpu_device;
+    init_info.ColorTargetFormat = SDL_GetGPUSwapchainTextureFormat(gui->gpu_device, gui->window);
+    init_info.MSAASamples = SDL_GPU_SAMPLECOUNT_1;
+    cImGui_ImplSDLGPU3_Init(&init_info);
+
+    return 0;
+}
+
+void set_pixel(_gui *gui, uint16_t x, uint16_t y, uint32_t color) {
+    if (!gui || !gui->pixels) return;
+    if (x >= NES_W || y >= NES_H) return;
+    gui->pixels[y * NES_W + x] = color;
+}
+
+uint64_t gui_draw(_gui *gui, _nes *nes) {
+    if (!gui || !gui->window || !gui->gpu_device) return 0;
+
+    SDL_GPUCommandBuffer *cmdbuf = SDL_AcquireGPUCommandBuffer(gui->gpu_device);
+    if (!cmdbuf) return 0;
+
+    upload_texture(gui, cmdbuf);
+
+    SDL_GPUTexture *swapchain_tex = NULL;
+    uint32_t sw = 0, sh = 0;
+    if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmdbuf, gui->window, &swapchain_tex, &sw, &sh) || !swapchain_tex) {
+        SDL_SubmitGPUCommandBuffer(cmdbuf);
+        uint64_t now = SDL_GetPerformanceCounter();
+        record_frame_time(now);
+        return now;
+    }
+
+    cImGui_ImplSDLGPU3_NewFrame();
+    cImGui_ImplSDL3_NewFrame();
+    ImGui_NewFrame();
+
+    draw_main_menu(gui, nes);
+    draw_settings_window(gui);
+
     ImGui_Render();
+    ImDrawData *draw_data = ImGui_GetDrawData();
+    cImGui_ImplSDLGPU3_PrepareDrawData(draw_data, cmdbuf);
 
-    draw_nes_texture(gui);
-    cImGui_ImplOpenGL3_RenderDrawData(ImGui_GetDrawData());
+    SDL_GPUColorTargetInfo color_target;
+    SDL_zero(color_target);
+    color_target.texture = swapchain_tex;
+    color_target.mip_level = 0;
+    color_target.layer_or_depth_plane = 0;
+    color_target.clear_color.r = 0.0f;
+    color_target.clear_color.g = 0.0f;
+    color_target.clear_color.b = 0.0f;
+    color_target.clear_color.a = 1.0f;
+    color_target.load_op = SDL_GPU_LOADOP_CLEAR;
+    color_target.store_op = SDL_GPU_STOREOP_STORE;
+    color_target.cycle = false;
+    color_target.cycle_resolve_texture = false;
 
-    ImGuiIO* io = ImGui_GetIO();
+    SDL_GPURenderPass *render_pass = SDL_BeginGPURenderPass(cmdbuf, &color_target, 1, NULL);
+    if (render_pass) {
+        SDL_BindGPUGraphicsPipeline(render_pass, gui->nes_pipeline);
+
+        SDL_GPUTextureSamplerBinding tex_binding;
+        SDL_zero(tex_binding);
+        tex_binding.texture = gui->nes_texture;
+        tex_binding.sampler = gui->nes_sampler;
+
+        SDL_BindGPUFragmentSamplers(render_pass, 0, &tex_binding, 1);
+        SDL_DrawGPUPrimitives(render_pass, 4, 1, 0, 0);
+
+        cImGui_ImplSDLGPU3_RenderDrawData(draw_data, cmdbuf, render_pass);
+        SDL_EndGPURenderPass(render_pass);
+    }
+
+    ImGuiIO *io = ImGui_GetIO();
     if (io->ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
         ImGui_UpdatePlatformWindows();
         ImGui_RenderPlatformWindowsDefault();
-        SDL_GL_MakeCurrent(gui->window, gui->gl_ctx);
     }
 
     uint64_t frame_end = SDL_GetPerformanceCounter();
+    SDL_SubmitGPUCommandBuffer(cmdbuf);
 
-    SDL_GL_SwapWindow(gui->window);
+    record_frame_time(frame_end);
     return frame_end;
 }
 
-void gui_deinit(_gui* gui) {
+void gui_deinit(_gui *gui) {
     if (!gui) return;
 
     if (gui->im_ctx) {
         ImGui_SetCurrentContext(gui->im_ctx);
-        cImGui_ImplOpenGL3_Shutdown();
+        cImGui_ImplSDLGPU3_Shutdown();
         cImGui_ImplSDL3_Shutdown();
         ImGui_DestroyContext(gui->im_ctx);
         gui->im_ctx = NULL;
@@ -343,29 +466,40 @@ void gui_deinit(_gui* gui) {
         gui->pixels = NULL;
     }
 
+    if (gui->nes_pipeline) {
+        SDL_ReleaseGPUGraphicsPipeline(gui->gpu_device, gui->nes_pipeline);
+        gui->nes_pipeline = NULL;
+    }
+
+    if (gui->nes_vs) {
+        SDL_ReleaseGPUShader(gui->gpu_device, gui->nes_vs);
+        gui->nes_vs = NULL;
+    }
+
+    if (gui->nes_fs) {
+        SDL_ReleaseGPUShader(gui->gpu_device, gui->nes_fs);
+        gui->nes_fs = NULL;
+    }
+
+    if (gui->nes_sampler) {
+        SDL_ReleaseGPUSampler(gui->gpu_device, gui->nes_sampler);
+        gui->nes_sampler = NULL;
+    }
+
+    if (gui->nes_transfer) {
+        SDL_ReleaseGPUTransferBuffer(gui->gpu_device, gui->nes_transfer);
+        gui->nes_transfer = NULL;
+    }
+
     if (gui->nes_texture) {
-        glDeleteTextures(1, &gui->nes_texture);
-        gui->nes_texture = 0;
+        SDL_ReleaseGPUTexture(gui->gpu_device, gui->nes_texture);
+        gui->nes_texture = NULL;
     }
 
-    if (gui->vao) {
-        glDeleteVertexArrays(1, &gui->vao);
-        gui->vao = 0;
-    }
-
-    if (gui->vbo) {
-        glDeleteBuffers(1, &gui->vbo);
-        gui->vbo = 0;
-    }
-
-    if (gui->program) {
-        glDeleteProgram(gui->program);
-        gui->program = 0;
-    }
-
-    if (gui->gl_ctx) {
-        SDL_GL_DestroyContext(gui->gl_ctx);
-        gui->gl_ctx = NULL;
+    if (gui->gpu_device) {
+        SDL_ReleaseWindowFromGPUDevice(gui->gpu_device, gui->window);
+        SDL_DestroyGPUDevice(gui->gpu_device);
+        gui->gpu_device = NULL;
     }
 
     if (gui->window) {

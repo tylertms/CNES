@@ -5,8 +5,6 @@
 #include <stdbool.h>
 #include <SDL3/SDL.h>
 
-static const double NES_FRAME_TIME = 655171.0 / 39375000.0;
-
 int main(int argc, char **argv) {
     if (argc <= 1) {
         printf("Usage: %s <file.nes>\n", argv[0]);
@@ -100,7 +98,7 @@ int main(int argc, char **argv) {
         uint64_t frame_start = SDL_GetPerformanceCounter();
 
         nes_clock(&nes);
-        uint64_t frame_end = gui_draw(&gui);
+        uint64_t frame_end = gui_draw(&gui, &nes);
 
         double frame_time = (double)(frame_end - frame_start) / (double)perf_freq;
         double interval = 0.0;
