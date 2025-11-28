@@ -35,7 +35,16 @@ jobs:
 
           - os: windows-latest
             arch: x64
+            msystem: MINGW64
             artifact: windows-x64
+          - os: windows-latest
+            arch: x86
+            msystem: MINGW32
+            artifact: windows-x86
+          - os: windows-latest
+            arch: arm64
+            msystem: UCRT64
+            artifact: windows-arm64
 
     runs-on: ${{ matrix.os }}
 
@@ -47,13 +56,13 @@ jobs:
         if: matrix.os == 'windows-latest'
         uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
+          msystem: ${{ matrix.msystem }}
           update: true
           install: >
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-pkg-config
+            mingw-w64-${{ matrix.arch == 'x86' && 'i686' || (matrix.arch == 'x64' && 'x86_64' || 'aarch64') }}-gcc
+            mingw-w64-${{ matrix.arch == 'x86' && 'i686' || (matrix.arch == 'x64' && 'x86_64' || 'aarch64') }}-cmake
+            mingw-w64-${{ matrix.arch == 'x86' && 'i686' || (matrix.arch == 'x64' && 'x86_64' || 'aarch64') }}-ninja
+            mingw-w64-${{ matrix.arch == 'x86' && 'i686' || (matrix.arch == 'x64' && 'x86_64' || 'aarch64') }}-pkg-config
 
       - name: Cache SDL3
         uses: actions/cache@v4
@@ -110,7 +119,8 @@ jobs:
           name: cnes-${{ matrix.artifact }}
           path: |
             build/cnes*
-            build/Release/cnes*.exe
+            build/*.exe
+            build/Release/*.exe
           if-no-files-found: ignore
 
   release:
@@ -134,17 +144,10 @@ jobs:
         run: |
           VERSION="${{ github.event.inputs.version }}"
           TAG="v$VERSION"
-
           git fetch --tags
-
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists! Pick a different version."
-            exit 1
-          fi
-
+          if git rev-parse "$TAG" >/dev/null 2>&1; then exit 1; fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
           git tag "$TAG"
           git push origin "$TAG"
 
@@ -152,14 +155,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.event.inputs.version }}
-          name: Release ${{ github.event.inputs.version }}
-          body: |
-            Version: ${{ github.event.inputs.version }}
-
-            Artifacts:
-            - Linux x64 / arm64
-            - macOS x64 / arm64
-            - Windows x64 (MinGW GCC)
           files: artifacts/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
