@@ -31,7 +31,6 @@ set(CMAKE_OPTIMIZE_DEPENDENCIES_RELEASE TRUE)
 
 target_compile_options(cnes PRIVATE
     -Wall
-    -Wextra
     -Wpedantic
     $<$<CONFIG:Debug>:-O2>
     $<$<CONFIG:Debug>:-g>

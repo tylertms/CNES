@@ -1,4 +1,4 @@
-name: CMake CI
+name: Build Release
 
 on:
   push:
@@ -24,9 +24,22 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            pkg-config \
+            libx11-dev \
+            libxext-dev \
+            libxrandr-dev \
+            libxcursor-dev \
+            libxfixes-dev \
+            libxi-dev \
+            libxss-dev \
+            libgl1-mesa-dev \
+            libasound2-dev \
+            libpulse-dev
 
-      - name: Configure CMake
+      - name: Configure
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
