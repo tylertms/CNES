@@ -182,7 +182,7 @@ static const uint16_t dmc_period[16] = {
     428, 380, 340, 320,
     286, 254, 226, 214,
     190, 160, 142, 128,
-    106,  85,  72,  54
+    106,  84,  72,  54
 };
 
 static inline float release_smooth(float rel, int gate_on) {

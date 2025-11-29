@@ -366,7 +366,7 @@ uint8_t gui_init(_gui *gui, char *file) {
     ImGuiStyle *style = ImGui_GetStyle();
     style->FramePadding = (ImVec2){0.f, 8.f};
     style->ItemSpacing = (ImVec2){8.f, 16.f};
-    style->Colors[ImGuiCol_MenuBarBg].w *= 0.0f;
+    style->Colors[ImGuiCol_MenuBarBg] = (ImVec4){0.1f, 0.1f, 0.1f, 1.0f};
 
     float scale = get_window_scale(gui->window);
     if (scale <= 0.0f)
