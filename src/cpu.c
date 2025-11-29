@@ -10,7 +10,16 @@
 
 void cpu_clock(_cpu* cpu) {
     cpu->total_cycles++;
-    if (--cpu->cycles) return;
+
+    if (cpu->cycles > 0) {
+        cpu->cycles--;
+
+        if (cpu->cycles == 0 && cpu->branch_page_cross) {
+            if (cpu->irq_pending) cpu->branch_irq_latch = 1;
+        }
+
+        return;
+    }
 
     if (cpu->nmi_pending) {
         cpu->nmi_pending = 0;
@@ -18,25 +27,42 @@ void cpu_clock(_cpu* cpu) {
         return;
     }
 
-    if (cpu->irq_pending && !get_flag(cpu, IRQ_DS)) {
-        if (cpu->irq_delay) {
-            cpu->irq_delay = 0;
-        } else {
+    uint8_t irq = cpu->branch_page_cross ? cpu->branch_irq_latch : cpu->irq_pending;
+    cpu->branch_irq_latch = 0;
+    cpu->branch_page_cross = 0;
+
+    if (cpu->irq_pending) {
+        if (cpu->irq_state == IRQ_FORCE_NEXT) {
+            cpu->irq_state = IRQ_NORMAL;
             cpu_irq(cpu);
             return;
         }
+
+        if (!get_flag(cpu, IRQ_DS)) {
+            if (cpu->irq_state == IRQ_SUPPRESS_NEXT) {
+                cpu->irq_state = IRQ_NORMAL;
+            } else {
+                cpu_irq(cpu);
+                return;
+            }
+        }
+    }
+
+    if (cpu->irq_state != IRQ_NORMAL) {
+        cpu->irq_state = IRQ_NORMAL;
     }
 
     uint8_t opcode = cpu_read(cpu, cpu->pc++);
+    cpu->opcode = opcode;
     cpu->instr = instructions[opcode];
-    cpu->cycles = cpu->instr.cycles;
-    uint8_t am_cycle = cpu->instr.ex_am(cpu);
+    cpu->cycles = 0;
 
+    uint8_t am_cycle = cpu->instr.ex_am(cpu);
     // print_state(cpu);
     // printf("\n");
-
     uint8_t op_cycle = cpu->instr.ex_op(cpu);
-    cpu->cycles += (am_cycle & op_cycle);
+
+    cpu->cycles += (cpu->instr.cycles - 1) + (am_cycle & op_cycle);
 }
 
 void cpu_reset(_cpu* cpu) {
@@ -58,11 +84,6 @@ void cpu_reset(_cpu* cpu) {
 }
 
 void cpu_irq(_cpu* cpu) {
-    if (get_flag(cpu, IRQ_DS))
-        return;
-
-    cpu->irq_pending = 0;
-
     push(cpu, cpu->pc >> 8);
     push(cpu, cpu->pc & 0xFF);
 
@@ -419,9 +440,11 @@ uint8_t op_cld(_cpu* cpu) {
 }
 
 uint8_t op_cli(_cpu* cpu) {
-    uint8_t old_irq_ds = get_flag(cpu, IRQ_DS);
+    if (get_flag(cpu, IRQ_DS)) {
+        cpu->irq_state = IRQ_SUPPRESS_NEXT;
+    }
+
     set_flag(cpu, IRQ_DS, 0);
-    cpu->irq_delay = old_irq_ds && cpu->irq_pending;
     return 0;
 }
 
@@ -655,7 +678,16 @@ uint8_t op_pla(_cpu* cpu) {
 }
 
 uint8_t op_plp(_cpu* cpu) {
+    uint8_t old_irq_ds = get_flag(cpu, IRQ_DS);
     cpu->p = pull(cpu) | UNUSED;
+
+    uint8_t new_irq_ds = get_flag(cpu, IRQ_DS);
+    if (old_irq_ds && !new_irq_ds) {
+        cpu->irq_state = IRQ_SUPPRESS_NEXT;
+    } else if (!old_irq_ds && new_irq_ds && cpu->irq_pending) {
+        cpu->irq_state = IRQ_FORCE_NEXT;
+    }
+
     return 0;
 }
 
@@ -724,6 +756,7 @@ uint8_t op_rti(_cpu* cpu) {
     cpu->p = pull(cpu) & ~BREAK & ~UNUSED;
     cpu->pc = pull(cpu);
     cpu->pc |= (uint16_t)pull(cpu) << 8;
+
 	return 0;
 }
 
@@ -766,6 +799,10 @@ uint8_t op_sed(_cpu* cpu) {
 }
 
 uint8_t op_sei(_cpu* cpu) {
+    if (!get_flag(cpu, IRQ_DS) && cpu->irq_pending) {
+        cpu->irq_state = IRQ_FORCE_NEXT;
+    }
+
     set_flag(cpu, IRQ_DS, 1);
 	return 0;
 }
@@ -922,8 +959,12 @@ void branch(_cpu* cpu) {
     cpu->cycles++;
     uint16_t res = cpu->op_addr + cpu->pc;
 
-    if ((res & 0xFF00) != (cpu->pc & 0xFF00))
+    if ((res & 0xFF00) != (cpu->pc & 0xFF00)) {
         cpu->cycles++;
+        cpu->branch_page_cross = 1;
+    } else {
+        cpu->branch_page_cross = 0;
+    }
 
     cpu->pc = res;
 }

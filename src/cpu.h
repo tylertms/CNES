@@ -26,6 +26,12 @@ typedef struct _instr {
     uint8_t opcount;            // number of operands after opcode
 } _instr;
 
+typedef enum _irq_state {
+    IRQ_NORMAL = 0,
+    IRQ_SUPPRESS_NEXT = 1,
+    IRQ_FORCE_NEXT = 2,
+} _irq_state;
+
 typedef struct _cpu {
     uint8_t a;              // accumulator
     uint8_t x;              // x register
@@ -35,6 +41,7 @@ typedef struct _cpu {
     uint16_t pc;            // program counter
 
     _instr instr;           // active instruction
+    uint8_t opcode;
     uint16_t op_addr;       // address of first operand
     uint8_t op_data;        // data buffer from address mode to operation
 
@@ -43,7 +50,10 @@ typedef struct _cpu {
     size_t total_cycles;    // total cycle counter
     uint8_t ram[0x800];     // cpu memory
 
-    uint8_t irq_delay;
+    uint8_t branch_page_cross;
+    uint8_t branch_irq_latch;
+
+    _irq_state irq_state;
     uint8_t irq_pending;
     uint8_t nmi_pending;
 
