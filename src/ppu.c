@@ -20,11 +20,23 @@ static inline void ppu_bus_decay(_ppu *ppu) {
 }
 
 static inline uint8_t render_enabled(_ppu* ppu) {
-    return ppu->ppumask & (BGRND_EN | SPRITE_EN);
+    return ppu->ppumask_render & (BGRND_EN | SPRITE_EN);
+}
+
+static inline uint8_t bgrnd_enabled(_ppu* ppu) {
+    return ppu->ppumask_render & BGRND_EN;
+}
+
+static inline uint8_t sprite_enabled(_ppu* ppu) {
+    return ppu->ppumask_render & SPRITE_EN;
 }
 
 uint8_t ppu_clock(_ppu* ppu) {
     ppu_bus_decay(ppu);
+
+    if (ppu->ppumask_delay > 0 && --ppu->ppumask_delay == 0) {
+        ppu->ppumask_render = ppu->ppumask;
+    }
 
     uint8_t frame_complete = 0x00;
 
@@ -212,11 +224,10 @@ uint8_t ppu_clock(_ppu* ppu) {
         bgrnd_palette = (uint8_t)((pal1 << 1) | pal0);
     }
 
-    uint8_t bgrnd_disabled = !(ppu->ppumask & BGRND_EN);
     uint8_t no_left_column = !(ppu->ppumask & BGRND_LC_EN) &&
                              cycle >= 1 && cycle <= 8;
 
-    if (bgrnd_disabled || no_left_column) {
+    if (!bgrnd_enabled(ppu) || no_left_column) {
         bgrnd_pixel = 0;
     }
 
@@ -225,7 +236,7 @@ uint8_t ppu_clock(_ppu* ppu) {
     uint8_t sprite_palette = 0x00;
     uint8_t sprite_priority = 0x00;
 
-    if (ppu->ppumask & SPRITE_EN) {
+    if (sprite_enabled(ppu)) {
         ppu->sprite_0_rendered = 0;
 
         for (uint8_t i = 0; i < ppu->sprite_count; i++) {
@@ -263,7 +274,7 @@ uint8_t ppu_clock(_ppu* ppu) {
         palette = bgrnd_palette;
     } else if (bgrnd_pixel && sprite_pixel) {
         uint8_t will_sprite_0_hit = ppu->sprite_0_hit_possible && ppu->sprite_0_rendered;
-        uint8_t rendering_both = (ppu->ppumask & BGRND_EN) && (ppu->ppumask & SPRITE_EN);
+        uint8_t rendering_both = bgrnd_enabled(ppu) && sprite_enabled(ppu);
 
         uint8_t bg_clip_disabled = !(ppu->ppumask & BGRND_LC_EN);
         uint8_t sprite_clip_disabled = !(ppu->ppumask & SPRITE_LC_EN);
@@ -303,9 +314,10 @@ uint8_t ppu_clock(_ppu* ppu) {
 
     ppu->cycle++;
 
+    uint8_t render_en_skip = ppu->ppumask & (BGRND_EN | SPRITE_EN);
     if (pre_render_scanline &&
-        cycle == 340 &&
-        rendering &&
+        cycle == 339 &&
+        render_en_skip &&
         ppu->odd_frame) {
 
         ppu->cycle = 0;
@@ -397,6 +409,18 @@ void ppu_cpu_write(_ppu* ppu, uint16_t addr, uint8_t data) {
 
 uint8_t ppustatus_cpu_read(_ppu* ppu) {
     uint8_t data = (ppu->ppustatus & 0xE0) | (ppu->ppudata & 0x1F);
+
+    if (ppu->scanline == 241) {
+        if (ppu->cycle == 1 || ppu->cycle == 2) {
+            data &= ~VBLANK;
+            ppu->ppustatus &= ~VBLANK;
+
+            if (ppu->p_cpu) {
+                ppu->p_cpu->nmi_pending = 0;
+            }
+        }
+    }
+
     ppu->ppustatus &= ~VBLANK;
     ppu->write_toggle = 0;
 
@@ -442,6 +466,7 @@ void ppuctrl_cpu_write(_ppu* ppu, uint8_t data) {
 
 void ppumask_cpu_write(_ppu* ppu, uint8_t data) {
     ppu->ppumask = data;
+    ppu->ppumask_delay = 3;
 }
 
 void oamaddr_cpu_write(_ppu* ppu, uint8_t data) {
@@ -567,7 +592,7 @@ void update_shifters(_ppu* ppu) {
     }
 
     uint8_t sprite_visible = ppu->cycle >= 1 && ppu->cycle <= (NES_W + 1);
-    if ((ppu->ppumask & SPRITE_EN) && sprite_visible) {
+    if (sprite_enabled(ppu) && sprite_visible) {
         for (uint8_t i = 0; i < ppu->sprite_count; i++) {
             if (ppu->sprites[i].pos_x) {
                 ppu->sprites[i].pos_x--;

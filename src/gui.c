@@ -304,8 +304,6 @@ uint8_t gui_init(_gui *gui, char *file) {
         return 1;
     }
 
-    SDL_SetHint(SDL_HINT_TIMER_RESOLUTION, "1");
-
     gui->window = SDL_CreateWindow(
         game_name(file),
         NES_W * 3,

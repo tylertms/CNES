@@ -41,6 +41,9 @@ typedef struct _ppu {
     uint16_t bus_decay;
     uint8_t data_buffer;
 
+    uint8_t ppumask_render;
+    int8_t ppumask_delay;
+
     uint16_t vram_addr;
     uint16_t tram_addr;
     uint8_t fine_x;
