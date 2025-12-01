@@ -24,7 +24,7 @@ MAPDEF(004)
 MAPDEF(007)
 
 /* MAPPER TABLE */
-static _mapper mappers[768] = {
+static const _mapper mappers[768] = {
     MAPPER(000),
     MAPPER(001),
     MAPPER(002),

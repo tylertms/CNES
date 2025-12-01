@@ -125,9 +125,9 @@ uint8_t ppu_clock(_ppu* ppu) {
                 } else if (stage == 6) {
                     ppu->bgrnd_next_high = ppu_read(
                         ppu,
-                        ((uint16_t)(ppu->ppuctrl & BGRND_SEL) << 8) |
+                        (((uint16_t)(ppu->ppuctrl & BGRND_SEL) << 8) |
                         ((uint16_t)ppu->bgrnd_next_id << 4) |
-                        ((ppu->vram_addr & FINE_Y) >> 12) + 8
+                        ((ppu->vram_addr & FINE_Y) >> 12)) + 8
                     );
                 } else if (stage == 7) {
                     increment_scroll_x(ppu);
