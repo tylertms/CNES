@@ -28,18 +28,20 @@ static inline void print_build_info(void) {
     printf("  SDL3 Revision: %s\n", SDL_GetRevision());
 }
 
-static uint8_t get_button_mask(SDL_Scancode code) {
-    switch (code) {
-        case SDL_SCANCODE_X:     return 0x80;
-        case SDL_SCANCODE_Z:     return 0x40;
-        case SDL_SCANCODE_A:     return 0x20;
-        case SDL_SCANCODE_S:     return 0x10;
-        case SDL_SCANCODE_UP:    return 0x08;
-        case SDL_SCANCODE_DOWN:  return 0x04;
-        case SDL_SCANCODE_LEFT:  return 0x02;
-        case SDL_SCANCODE_RIGHT: return 0x01;
-        default: return 0;
-    }
+static uint8_t poll_controller_input(void) {
+    const bool *state = SDL_GetKeyboardState(NULL);
+    uint8_t mask = 0;
+
+    if (state[SDL_SCANCODE_X])     mask |= 0x80;
+    if (state[SDL_SCANCODE_Z])     mask |= 0x40;
+    if (state[SDL_SCANCODE_A])     mask |= 0x20;
+    if (state[SDL_SCANCODE_S])     mask |= 0x10;
+    if (state[SDL_SCANCODE_UP])    mask |= 0x08;
+    if (state[SDL_SCANCODE_DOWN])  mask |= 0x04;
+    if (state[SDL_SCANCODE_LEFT])  mask |= 0x02;
+    if (state[SDL_SCANCODE_RIGHT]) mask |= 0x01;
+
+    return mask;
 }
 
 int main(int argc, char **argv) {
@@ -76,8 +78,6 @@ int main(int argc, char **argv) {
     double max_frame_time = 0.0;
     double min_frame_time = 1.0;
 
-    uint8_t controller_state = 0;
-
     while (!nes.cpu.halt && !gui.quit) {
         uint64_t now = SDL_GetPerformanceCounter();
         int64_t remaining_ticks = (int64_t)next_frame_target - (int64_t)now;
@@ -107,28 +107,14 @@ int main(int argc, char **argv) {
                 nes.cpu.halt = 1;
                 break;
 
-            case SDL_EVENT_KEY_DOWN: {
+            case SDL_EVENT_KEY_DOWN:
                 if ((event.key.scancode == SDL_SCANCODE_BACKSPACE) ||
                     (event.key.scancode == SDL_SCANCODE_DELETE)) {
                     nes_reset(&nes);
                 } else {
                     SDL_HideCursor();
                 }
-
-                uint8_t mask = get_button_mask(event.key.scancode);
-                if (mask) {
-                    controller_state |= mask;
-                }
                 break;
-            }
-
-            case SDL_EVENT_KEY_UP: {
-                uint8_t mask = get_button_mask(event.key.scancode);
-                if (mask) {
-                    controller_state &= ~mask;
-                }
-                break;
-            }
 
             case SDL_EVENT_MOUSE_MOTION:
                 SDL_ShowCursor();
@@ -136,7 +122,7 @@ int main(int argc, char **argv) {
             }
         }
 
-        nes.input.controller[0] = controller_state;
+        nes.input.controller[0] = poll_controller_input();
 
         uint64_t work_start = SDL_GetPerformanceCounter();
         nes_clock(&nes);
