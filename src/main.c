@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <math.h>
+#include <stdlib.h>
 #include <SDL3/SDL.h>
 
 #define NES_REFRESH_RATE 60.0988138974405
