@@ -1,4 +1,5 @@
 #include "gui.h"
+#include "PressStart2P-Regular.h"
 #include "dcimgui.h"
 #include "ppu.h"
 
@@ -391,9 +392,9 @@ uint8_t gui_init(_gui *gui, char *file) {
     float base_font_size = 10.0f;
     float actual_size_pixels = base_font_size * scale;
 
-    gui->nes_font = ImFontAtlas_AddFontFromFileTTF(
+    gui->nes_font = ImFontAtlas_AddFontFromMemoryTTF(
         io->Fonts,
-        "external/fonts/PressStart2P-Regular.ttf",
+        (void*)nes_font, nes_font_len,
         actual_size_pixels,
         &cfg,
         NULL
