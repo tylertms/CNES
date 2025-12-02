@@ -131,6 +131,42 @@ uint8_t cart_load(_cart* cart, char* file) {
     return 0;
 }
 
+void cart_unload(_cart* cart) {
+    if (cart->prg_rom.data) {
+        free(cart->prg_rom.data);
+        memset(&cart->prg_rom, 0, sizeof(_mem));
+    }
+
+    if (cart->chr_rom.data) {
+        free(cart->chr_rom.data);
+        memset(&cart->chr_rom, 0, sizeof(_mem));
+    }
+
+    if (cart->prg_ram.data) {
+        free(cart->prg_ram.data);
+        memset(&cart->prg_ram, 0, sizeof(_mem));
+    }
+
+    if (cart->prg_nvram.data) {
+        free(cart->prg_nvram.data);
+        memset(&cart->prg_nvram, 0, sizeof(_mem));
+    }
+
+    if (cart->chr_ram.data) {
+        free(cart->chr_ram.data);
+        memset(&cart->chr_ram, 0, sizeof(_mem));
+    }
+
+    if (cart->chr_nvram.data) {
+        free(cart->chr_nvram.data);
+        memset(&cart->chr_nvram, 0, sizeof(_mem));
+    }
+
+    if (cart->mapper.deinit) {
+        cart->mapper.deinit(cart);
+    }
+}
+
 uint8_t parse_ines(_cart* cart, uint8_t header[16]) {
     cart->prg_ram_banks = header[8];
     cart->tv_system = header[9] & 0x01;

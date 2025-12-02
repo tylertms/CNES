@@ -65,6 +65,7 @@ typedef struct _cart {
 } _cart;
 
 uint8_t cart_load(_cart* cart, char* file);
+void cart_unload(_cart* cart);
 uint8_t parse_ines(_cart* cart, uint8_t header[16]);
 uint8_t parse_nes2(_cart* cart, uint8_t header[16]);
 
