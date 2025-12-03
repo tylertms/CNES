@@ -43,6 +43,8 @@ uint8_t cart_load(_cart* cart, char* file) {
         return 1;
     }
 
+    printf("Using mapper: %d, submapper (currently unused): %d\n", cart->mapper_id & 0x0FFF, cart->mapper_id >> 12);
+
     cart->mapper.init(cart);
 
     if (cart->trainer)
