@@ -194,3 +194,13 @@ void map_ppu_write_1(_cart* cart, uint16_t addr, uint8_t data) {
         cart->chr_ram.data[off] = data;
     }
 }
+
+REGISTER_MAPPER(1,
+    map_init_1,
+    map_deinit_1,
+    map_irq_pending_1,
+    map_cpu_read_1,
+    map_cpu_write_1,
+    map_ppu_read_1,
+    map_ppu_write_1
+)

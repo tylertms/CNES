@@ -69,3 +69,13 @@ void map_ppu_write_79(_cart* cart, uint16_t addr, uint8_t data) {
         else if (cart->chr_nvram.size)  cart->chr_nvram.data[offset] = data;
     }
 }
+
+REGISTER_MAPPER(79,
+    map_init_79,
+    map_deinit_79,
+    map_irq_pending_79,
+    map_cpu_read_79,
+    map_cpu_write_79,
+    map_ppu_read_79,
+    map_ppu_write_79
+)

@@ -66,3 +66,13 @@ void map_ppu_write_7(_cart* cart, uint16_t addr, uint8_t data) {
         }
     }
 }
+
+REGISTER_MAPPER(7,
+    map_init_7,
+    map_deinit_7,
+    map_irq_pending_7,
+    map_cpu_read_7,
+    map_cpu_write_7,
+    map_ppu_read_7,
+    map_ppu_write_7
+)

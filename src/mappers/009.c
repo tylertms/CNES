@@ -125,3 +125,13 @@ void map_ppu_write_9(_cart* cart, uint16_t addr, uint8_t data) {
          if (cart->chr_ram.size) cart->chr_ram.data[addr] = data;
     }
 }
+
+REGISTER_MAPPER(9,
+    map_init_9,
+    map_deinit_9,
+    map_irq_pending_9,
+    map_cpu_read_9,
+    map_cpu_write_9,
+    map_ppu_read_9,
+    map_ppu_write_9
+)

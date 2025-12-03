@@ -36,16 +36,7 @@ uint8_t cart_load(_cart* cart, char* file) {
     if (nes2) parse_nes2(cart, header);
     else parse_ines(cart, header);
 
-    cart->mapper = mappers[cart->mapper_id & 0x0FFF];
-
-    if (!cart->mapper.init) {
-        fprintf(stderr, "ERROR: Mapper %03d is currently unsupported!\n", cart->mapper_id & 0x0FFF);
-        return 1;
-    }
-
-    printf("Using mapper: %d, submapper (currently unused): %d\n", cart->mapper_id & 0x0FFF, cart->mapper_id >> 12);
-
-    cart->mapper.init(cart);
+    if (mapper_load(cart)) return 1;
 
     if (cart->trainer)
         fseek(rom, 0x200, SEEK_CUR);

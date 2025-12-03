@@ -223,3 +223,13 @@ void map_ppu_write_4(_cart* cart, uint16_t addr, uint8_t data) {
         }
     }
 }
+
+REGISTER_MAPPER(4,
+    map_init_4,
+    map_deinit_4,
+    map_irq_pending_4,
+    map_cpu_read_4,
+    map_cpu_write_4,
+    map_ppu_read_4,
+    map_ppu_write_4
+)

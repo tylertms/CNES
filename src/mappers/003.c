@@ -84,3 +84,13 @@ void map_ppu_write_3(_cart* cart, uint16_t addr, uint8_t data) {
         }
     }
 }
+
+REGISTER_MAPPER(3,
+    map_init_3,
+    map_deinit_3,
+    map_irq_pending_3,
+    map_cpu_read_3,
+    map_cpu_write_3,
+    map_ppu_read_3,
+    map_ppu_write_3
+)

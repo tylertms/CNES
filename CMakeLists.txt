@@ -28,6 +28,7 @@ add_executable(cnes
     src/gui.c
     src/input.c
     src/main.c
+    src/mapper.c
     src/nes.c
     src/ppu.c
     ${MAPPERS}

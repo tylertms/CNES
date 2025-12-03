@@ -1,43 +1,27 @@
 #pragma once
 #include "cart.h"
-#include <stdint.h>
 #include <stdlib.h>
 
-#define MAPDEF(num) \
-    uint8_t map_init_##num(_cart* cart); \
-    uint8_t map_deinit_##num(_cart* cart); \
-    uint8_t map_irq_pending_##num(_cart* cart); \
-    uint8_t map_cpu_read_##num(_cart* cart, uint16_t addr); \
-    void map_cpu_write_##num(_cart* cart, uint16_t addr, uint8_t data); \
-    uint8_t map_ppu_read_##num(_cart* cart, uint16_t addr); \
-    void map_ppu_write_##num(_cart* cart, uint16_t addr, uint8_t data); \
+extern _mapper mapper_table[256];
 
-#define MAPPER(num) \
-    [num] = {map_init_##num, map_deinit_##num, map_irq_pending_##num, map_cpu_read_##num, map_cpu_write_##num, map_ppu_read_##num, map_ppu_write_##num, NULL}
+#if defined(_MSC_VER)
+    #pragma section(".CRT$XCU", read)
+    #define REGISTER_MAPPER(id, init, deinit, irq, cpu_read, cpu_write, ppu_read, ppu_write) \
+        static void register_mapper_##id(void) { \
+            mapper_table[id] = (_mapper){init, deinit, irq, cpu_read, cpu_write, ppu_read, ppu_write, NULL}; \
+        } \
+        __declspec(allocate(".CRT$XCU")) void (*mapper_init_##id)(void) = register_mapper_##id;
+#elif defined(__GNUC__) || defined(__clang__)
+    #define REGISTER_MAPPER(id, init, deinit, irq, cpu_read, cpu_write, ppu_read, ppu_write) \
+        __attribute__((constructor)) static void register_mapper_##id(void) { \
+            mapper_table[id] = (_mapper){init, deinit, irq, cpu_read, cpu_write, ppu_read, ppu_write, NULL}; \
+        }
+#else
+    #error "Compiler not supported for mapper registration. Please use GCC/Clang/MSVC."
+#endif
 
-/* DEFINES */
-MAPDEF(  0)
-MAPDEF(  1)
-MAPDEF(  2)
-MAPDEF(  3)
-MAPDEF(  4)
-MAPDEF(  7)
-MAPDEF(  9)
-MAPDEF( 79)
-MAPDEF(148)
 
-/* MAPPER TABLE */
-static const _mapper mappers[768] = {
-    MAPPER(  0),
-    MAPPER(  1),
-    MAPPER(  2),
-    MAPPER(  3),
-    MAPPER(  4),
-    MAPPER(  7),
-    MAPPER(  9),
-    MAPPER( 79),
-    MAPPER(148)
-};
+uint8_t mapper_load(_cart* cart);
 
-/* MISC */
-void mmc3_scanline_tick(_cart* cart);
+// MISC
+void mmc3_scanline_tick(_cart *cart);
