@@ -22,6 +22,7 @@ MAPDEF(2)
 MAPDEF(3)
 MAPDEF(4)
 MAPDEF(7)
+MAPDEF(9)
 MAPDEF(79)
 MAPDEF(148)
 
@@ -33,6 +34,7 @@ static const _mapper mappers[768] = {
     MAPPER(3),
     MAPPER(4),
     MAPPER(7),
+    MAPPER(9),
     MAPPER(79),
     MAPPER(148)
 };

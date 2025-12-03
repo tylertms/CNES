@@ -36,15 +36,10 @@ uint8_t map_cpu_read_79(_cart* cart, uint16_t addr) {
 }
 
 void map_cpu_write_79(_cart* cart, uint16_t addr, uint8_t data) {
-    _mdata* mdata = cart->mapper.data;
     uint16_t ctrl_mask = 0xE100;
     uint16_t ctrl_bits = 0x4100;
 
-    if (addr >= 0x6000 && addr <= 0x7FFF) {
-        uint32_t offset = (mdata->prg_bank * 0x8000) + (addr & 0x7FFF);
-        if (cart->prg_ram.size)         cart->prg_ram.data[offset] = data;
-        else if (cart->prg_nvram.size)  cart->prg_nvram.data[offset] = data;
-    } else if ((addr & ctrl_mask) == ctrl_bits) {
+    if ((addr & ctrl_mask) == ctrl_bits) {
         _mdata* mdata = cart->mapper.data;
         mdata->prg_bank = (data & 0x08) >> 3;
         mdata->chr_bank = data & 0x07;
@@ -70,8 +65,7 @@ void map_ppu_write_79(_cart* cart, uint16_t addr, uint8_t data) {
 
     if (0x0000 <= addr && addr <= 0x1FFF) {
         uint16_t offset = (mdata->chr_bank * 0x2000) + (addr & 0x1FFF);
-        if (cart->chr_rom.size)         cart->chr_rom.data[offset] = data;
-        else if (cart->chr_ram.size)    cart->chr_ram.data[offset] = data;
+        if (cart->chr_ram.size)    cart->chr_ram.data[offset] = data;
         else if (cart->chr_nvram.size)  cart->chr_nvram.data[offset] = data;
     }
 }
