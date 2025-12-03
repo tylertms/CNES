@@ -392,9 +392,8 @@ static void draw_info_menu(_nes* nes) {
         ImGui_Text("%d", nes->cart.mapper_id >> 12);
 
 
-        const int8_t buf_size = 32;
-        char prg_buf[buf_size];
-        char chr_buf[buf_size];
+        char prg_buf[32];
+        char chr_buf[32];
 
         ImGui_TableNextRowEx(0, 0.0f);
         ImGui_TableSetColumnIndex(0);
@@ -404,8 +403,8 @@ static void draw_info_menu(_nes* nes) {
         ImGui_TableSetColumnIndex(1);
         ImGui_AlignTextToFramePadding();
         ImGui_Text("PRG: %s, CHR: %s",
-            format_bytes(nes->cart.prg_rom.size, prg_buf, buf_size),
-            format_bytes(nes->cart.chr_rom.size, chr_buf, buf_size)
+            format_bytes(nes->cart.prg_rom.size, prg_buf, 32),
+            format_bytes(nes->cart.chr_rom.size, chr_buf, 32)
         );
 
 
@@ -417,8 +416,8 @@ static void draw_info_menu(_nes* nes) {
         ImGui_TableSetColumnIndex(1);
         ImGui_AlignTextToFramePadding();
         ImGui_Text("PRG: %s, CHR: %s",
-            format_bytes(nes->cart.prg_ram.size, prg_buf, buf_size),
-            format_bytes(nes->cart.chr_ram.size, chr_buf, buf_size)
+            format_bytes(nes->cart.prg_ram.size, prg_buf, 32),
+            format_bytes(nes->cart.chr_ram.size, chr_buf, 32)
         );
 
 
@@ -430,8 +429,8 @@ static void draw_info_menu(_nes* nes) {
         ImGui_TableSetColumnIndex(1);
         ImGui_AlignTextToFramePadding();
         ImGui_Text("PRG: %s, CHR: %s",
-            format_bytes(nes->cart.prg_nvram.size, prg_buf, buf_size),
-            format_bytes(nes->cart.chr_nvram.size, chr_buf, buf_size)
+            format_bytes(nes->cart.prg_nvram.size, prg_buf, 32),
+            format_bytes(nes->cart.chr_nvram.size, chr_buf, 32)
         );
 
 
