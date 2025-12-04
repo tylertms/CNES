@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <SDL3/SDL.h>
 
-//#define CNES_NO_STATS
+#define CNES_NO_STATS
 #define NES_REFRESH_RATE 60.0988138974405
 #define NES_FRAME_TIME_SEC (1.0 / NES_REFRESH_RATE)
 
