@@ -101,6 +101,10 @@ void apu_reset(_apu* apu) {
     apu->p_cpu = saved.p_cpu;
     apu->sample_count = 0;
 
+    if (apu->audio_stream) {
+        SDL_ClearAudioStream(apu->audio_stream);
+    }
+
     apu->noise.shift_reg = 1;
     apu->noise.timer = noise_period[0];
     apu->noise.timer_value = apu->noise.timer;

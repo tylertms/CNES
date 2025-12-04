@@ -197,10 +197,11 @@ int main(int argc, char** argv) {
         }
 
         next_frame_target += (uint64_t)((NES_FRAME_TIME_SEC + adjustment) * perf_freq_dbl);
-
         now = SDL_GetPerformanceCounter();
-        if (now > next_frame_target + perf_freq) {
-             next_frame_target = now;
+
+        uint64_t lag_threshold = (uint64_t)(NES_FRAME_TIME_SEC * 2.0 * perf_freq_dbl);
+        if (now > next_frame_target + lag_threshold) {
+            next_frame_target = now;
         }
 
 #ifndef CNES_NO_STATS
