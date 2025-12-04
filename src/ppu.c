@@ -5,6 +5,7 @@
 #include "mapper.h"
 #include "palette.h"
 #include <string.h>
+#include <stdio.h>
 
 static inline void ppu_bus_set(_ppu* ppu, uint8_t value) {
     ppu->ppudata = value;
@@ -360,7 +361,7 @@ void set_pixel(_ppu* ppu, uint16_t x, uint16_t y, uint32_t color) {
 CNES_RESULT ppu_init(_ppu* ppu) {
     ppu->pixels = (uint32_t*)SDL_calloc(NES_PIXELS, sizeof(uint32_t));
     if (!ppu->pixels) {
-        fprintf(stderr, "ERROR: Failed to allocate pixel buffer!\n");
+        fprintf(stderr, "[ERROR] Failed to allocate pixel buffer!\n");
         return CNES_FAILURE;
     }
 

@@ -79,7 +79,7 @@ CNES_RESULT apu_init(_apu* apu) {
     open_audio_stream(apu);
 
     if (!apu->audio_stream) {
-        fprintf(stderr, "ERROR: Failed to open audio stream: %s\n", SDL_GetError());
+        fprintf(stderr, "[ERROR] Failed to open audio stream: %s\n", SDL_GetError());
         return CNES_FAILURE;
     }
 

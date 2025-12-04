@@ -7,18 +7,18 @@
 CNES_RESULT cart_load(_cart* cart) {
     FILE* rom = fopen(cart->rom_path, "rb");
     if (rom == NULL) {
-        fprintf(stderr, "ERROR: Failed to open .nes file!\n");
+        fprintf(stderr, "[ERROR] Failed to open .nes file!\n");
         return CNES_FAILURE;
     }
 
     uint8_t header[0x10];
     if (fread(header, 1, 0x10, rom) != 0x10) {
-        fprintf(stderr, "ERROR: Failed to read header from .nes file!\n");
+        fprintf(stderr, "[ERROR] Failed to read header from .nes file!\n");
         return CNES_FAILURE;
     };
 
     if (memcmp(header, "NES\x1A", 4)) {
-        fprintf(stderr, "ERROR: .nes file is not valid!\n");
+        fprintf(stderr, "[ERROR] .nes file is not valid!\n");
         return CNES_FAILURE;
     }
 
@@ -37,7 +37,7 @@ CNES_RESULT cart_load(_cart* cart) {
     else parse_ines(cart, header);
 
     if (mapper_load(cart) != CNES_SUCCESS) {
-        fprintf(stderr, "ERROR: Failed to find and initialize mapper!\n");
+        fprintf(stderr, "[ERROR] Failed to find and initialize mapper!\n");
         return CNES_FAILURE;
     }
 
@@ -70,7 +70,7 @@ CNES_RESULT cart_load(_cart* cart) {
 
         size_t prg_rom_read = fread(cart->prg_rom.data, 0x01, prg_rom_size, rom);
         if (prg_rom_read != prg_rom_size) {
-            fprintf(stderr, "ERROR: Failed to read program rom from .nes file!\n");
+            fprintf(stderr, "[ERROR] Failed to read program rom from .nes file!\n");
             return CNES_FAILURE;
         }
     }
@@ -84,7 +84,7 @@ CNES_RESULT cart_load(_cart* cart) {
 
         size_t chr_rom_read = fread(cart->chr_rom.data, 0x01, chr_rom_size, rom);
         if (chr_rom_read != chr_rom_size) {
-            fprintf(stderr, "ERROR: Failed to read character rom from .nes file!\n");
+            fprintf(stderr, "[ERROR] Failed to read character rom from .nes file!\n");
             return CNES_FAILURE;
         }
     }

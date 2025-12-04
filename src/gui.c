@@ -71,7 +71,7 @@ static CNES_RESULT try_set_present_mode(_gui* gui, SDL_GPUPresentMode mode) {
 
     if (result == CNES_SUCCESS) {
         gui->present_mode = mode;
-        SDL_Log("Using present mode %d (0=VSYNC, 1=IMMEDIATE, 2=MAILBOX)", (int)mode);
+        fprintf(stderr, "[INFO] Using present mode %d (0=VSYNC, 1=IMMEDIATE, 2=MAILBOX)\n", (int)mode);
     }
 
     return result;
@@ -106,7 +106,7 @@ static CNES_RESULT configure_present_mode(_gui* gui) {
     gui->pending_mode = gui->present_mode;
     gui->needs_mode_update = false;
 
-    SDL_Log("Warning: Failed to set preferred present modes, keeping default swapchain parameters!");
+    fprintf(stderr, "[WARNING] Failed to set preferred present modes, keeping default swapchain parameters!\n");
     return CNES_FAILURE;
 }
 
@@ -124,7 +124,7 @@ static CNES_RESULT create_texture(_gui* gui) {
 
     gui->nes_texture = SDL_CreateGPUTexture(gui->gpu_device, &tinfo);
     if (!gui->nes_texture) {
-        SDL_Log("SDL_CreateGPUTexture failed: %s", SDL_GetError());
+        fprintf(stderr, "[ERROR] SDL_CreateGPUTexture failed: %s\n", SDL_GetError());
         return CNES_FAILURE;
     }
 
@@ -135,7 +135,7 @@ static CNES_RESULT create_texture(_gui* gui) {
 
     gui->nes_transfer = SDL_CreateGPUTransferBuffer(gui->gpu_device, &transfer_buffer);
     if (!gui->nes_transfer) {
-        SDL_Log("SDL_CreateGPUTransferBuffer failed: %s", SDL_GetError());
+        fprintf(stderr, "[ERROR] SDL_CreateGPUTransferBuffer failed: %s\n", SDL_GetError());
         return CNES_FAILURE;
     }
 
@@ -150,7 +150,7 @@ static CNES_RESULT create_texture(_gui* gui) {
 
     gui->nes_sampler = SDL_CreateGPUSampler(gui->gpu_device, &sampler_create_info);
     if (!gui->nes_sampler) {
-        SDL_Log("ERROR: SDL_CreateGPUSampler failed: %s", SDL_GetError());
+        fprintf(stderr, "[ERROR] SDL_CreateGPUSampler failed: %s\n", SDL_GetError());
         return CNES_FAILURE;
     }
 
@@ -165,7 +165,7 @@ static CNES_RESULT create_pipeline(_gui* gui) {
     } else if (supported & SDL_GPU_SHADERFORMAT_MSL) {
         fmt = SDL_GPU_SHADERFORMAT_MSL;
     } else {
-        SDL_Log("ERROR: No supported shader format (SPIR-V/MSL) available");
+        fprintf(stderr, "[ERROR] No supported shader format (SPIR-V/MSL) available.\n");
         return CNES_FAILURE;
     }
 
@@ -198,7 +198,7 @@ static CNES_RESULT create_pipeline(_gui* gui) {
 
     gui->nes_vs = SDL_CreateGPUShader(gui->gpu_device, &vs_info);
     if (!gui->nes_vs) {
-        SDL_Log("ERROR: SDL_CreateGPUShader (vertex) failed: %s", SDL_GetError());
+        fprintf(stderr, "[ERROR] SDL_CreateGPUShader (vertex) failed: %s\n", SDL_GetError());
         return CNES_FAILURE;
     }
 
@@ -213,7 +213,7 @@ static CNES_RESULT create_pipeline(_gui* gui) {
 
     gui->nes_fs = SDL_CreateGPUShader(gui->gpu_device, &fs_info);
     if (!gui->nes_fs) {
-        SDL_Log("ERROR: SDL_CreateGPUShader (fragment) failed: %s", SDL_GetError());
+        fprintf(stderr, "[ERROR] SDL_CreateGPUShader (fragment) failed: %s\n", SDL_GetError());
         return CNES_FAILURE;
     }
 
@@ -248,7 +248,7 @@ static CNES_RESULT create_pipeline(_gui* gui) {
 
     gui->nes_pipeline = SDL_CreateGPUGraphicsPipeline(gui->gpu_device, &pi);
     if (!gui->nes_pipeline) {
-        SDL_Log("ERROR: SDL_CreateGPUGraphicsPipeline failed: %s", SDL_GetError());
+        fprintf(stderr, "[ERROR] SDL_CreateGPUGraphicsPipeline failed: %s\n", SDL_GetError());
         return CNES_FAILURE;
     }
 
@@ -489,7 +489,7 @@ CNES_RESULT gui_init(_gui* gui) {
     memset(gui, 0, sizeof(_gui));
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_EVENTS) == false) {
-        SDL_Log("ERROR: SDL_Init failed: %s", SDL_GetError());
+        fprintf(stderr, "[ERROR] SDL_Init failed: %s\n", SDL_GetError());
         return CNES_FAILURE;
     }
 
@@ -501,7 +501,7 @@ CNES_RESULT gui_init(_gui* gui) {
     );
 
     if (!gui->window) {
-        SDL_Log("ERROR: SDL_CreateWindow failed: %s", SDL_GetError());
+        fprintf(stderr, "[ERROR] SDL_CreateWindow failed: %s\n", SDL_GetError());
         gui_deinit(gui);
         return CNES_FAILURE;
     }
@@ -512,13 +512,13 @@ CNES_RESULT gui_init(_gui* gui) {
     );
 
     if (!gui->gpu_device) {
-        SDL_Log("ERROR: SDL_CreateGPUDevice failed: %s", SDL_GetError());
+        fprintf(stderr, "[ERROR] SDL_CreateGPUDevice failed: %s\n", SDL_GetError());
         gui_deinit(gui);
         return CNES_FAILURE;
     }
 
     if (SDL_ClaimWindowForGPUDevice(gui->gpu_device, gui->window) == false) {
-        SDL_Log("ERROR: SDL_ClaimWindowForGPUDevice failed: %s", SDL_GetError());
+        fprintf(stderr, "[ERROR] SDL_ClaimWindowForGPUDevice failed: %s\n", SDL_GetError());
         gui_deinit(gui);
         return CNES_FAILURE;
     }
@@ -578,7 +578,7 @@ CNES_RESULT gui_init(_gui* gui) {
         NULL
     );
     if (!gui->nes_font) {
-        SDL_Log("ERROR: failed to load NES font!");
+        fprintf(stderr, "[ERROR] failed to load NES font!\n");
     } else {
         io->FontDefault = gui->nes_font;
         io->FontGlobalScale = 1.0f / scale;

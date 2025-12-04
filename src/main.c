@@ -14,18 +14,18 @@
 #define MAX_ADJUSTMENT (0.0005)
 
 static inline void print_build_info(void) {
-    printf("cnes build info:\n");
+    printf("[INFO] CNES BUILD:\n");
 #ifdef NDEBUG
     printf("  NDEBUG = 1\n");
 #else
     printf("  NDEBUG = 0\n");
 #endif
 #ifdef __OPTIMIZE__
-    printf("  __OPTIMIZE__ = 1\n");
+    printf("  OPTIMIZE = 1\n");
 #else
-    printf("  __OPTIMIZE__ = 0\n");
+    printf("  OPTIMIZE = 0\n");
 #endif
-    printf("  SDL3 Revision: %s\n", SDL_GetRevision());
+    printf("  SDL3: %s\n", SDL_GetRevision());
 }
 
 static uint8_t poll_controller_input(void) {

@@ -9,7 +9,7 @@ CNES_RESULT mapper_load(_cart* cart) {
         cart->mapper = mapper_table[id];
         return cart->mapper.init(cart);
     } else {
-        fprintf(stderr, "ERROR: Mapper %03d is currently unsupported!\n", id);
+        fprintf(stderr, "[ERROR] Mapper %03d is currently unsupported!\n", id);
         return CNES_FAILURE;
     }
 }
