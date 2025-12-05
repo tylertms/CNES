@@ -78,6 +78,7 @@ void cpu_reset(_cpu* cpu) {
 
     cpu->op_addr = 0x0000;
     cpu->op_data = 0x00;
+    cpu->open_bus = 0x00;
 
     cpu->cycles = 7;
     cpu->halt = 0;
@@ -118,15 +119,15 @@ void cpu_nmi(_cpu* cpu) {
 }
 
 uint8_t cpu_read(_cpu* cpu, uint16_t addr) {
-    uint8_t data = 0x00;
+    uint8_t data = cpu->open_bus;
 
     if (0x0000 <= addr && addr <= 0x1FFF) {
         data = cpu->ram[addr & 0x07FF];
     } else if (0x2000 <= addr && addr <= 0x3FFF) {
-        uint16_t reg_addr = 0x2000 | (addr & 0x0007);
-        data = ppu_cpu_read(cpu->p_ppu, reg_addr);
+        data = ppu_cpu_read(cpu->p_ppu, addr);
     } else if (0x4016 <= addr && addr <= 0x4017) {
-        data = input_cpu_read(cpu->p_input, addr);
+        uint8_t input = input_cpu_read(cpu->p_input, addr);
+        data = (data & 0xE0) | (input & 0x1F);
     } else if (addr == 0x4015) {
         data = apu_cpu_read(cpu->p_apu, addr);
     } else if (0x4020 <= addr && addr <= 0xFFFF) {
@@ -135,15 +136,17 @@ uint8_t cpu_read(_cpu* cpu, uint16_t addr) {
         }
     }
 
+    cpu->open_bus = data;
     return data;
 }
 
 void cpu_write(_cpu* cpu, uint16_t addr, uint8_t data) {
+    cpu->open_bus = data;
+
     if (0x0000 <= addr && addr <= 0x1FFF) {
         cpu->ram[addr & 0x07FF] = data;
     } else if (0x2000 <= addr && addr <= 0x3FFF) {
-        uint16_t reg_addr = 0x2000 | (addr & 0x0007);
-        ppu_cpu_write(cpu->p_ppu, reg_addr, data);
+        ppu_cpu_write(cpu->p_ppu, addr, data);
     } else if ((0x4000 <= addr && addr <= 0x4013) || addr == 0x4015 || addr == 0x4017) {
         apu_cpu_write(cpu->p_apu, addr, data);
     } else if (addr == 0x4014) {
@@ -199,15 +202,35 @@ uint8_t am_abs(_cpu* cpu) {
 uint8_t am_abx(_cpu* cpu) {
     uint16_t low = cpu_read(cpu, cpu->pc++);
     uint16_t high = cpu_read(cpu, cpu->pc++);
-    cpu->op_addr = ((high << 8) | low) + cpu->x;
-    return (cpu->op_addr & 0xFF00) != (high << 8);
+    uint16_t base = (high << 8) | low;
+    cpu->op_addr = base + cpu->x;
+
+    uint8_t page_crossed = (cpu->op_addr & 0xFF00) != (high << 8);
+
+    if (page_crossed || is_store(cpu)) {
+        uint16_t dummy_addr = (high << 8) | (cpu->op_addr & 0xFF);
+        cpu_read(cpu, dummy_addr);
+        return 1;
+    }
+
+    return 0;
 }
 
 uint8_t am_aby(_cpu* cpu) {
     uint16_t low = cpu_read(cpu, cpu->pc++);
     uint16_t high = cpu_read(cpu, cpu->pc++);
-    cpu->op_addr = ((high << 8) | low) + cpu->y;
-    return (cpu->op_addr & 0xFF00) != (high << 8);
+    uint16_t base = (high << 8) | low;
+    cpu->op_addr = base + cpu->y;
+
+    uint8_t page_crossed = (cpu->op_addr & 0xFF00) != (high << 8);
+
+    if (page_crossed || is_store(cpu)) {
+        uint16_t dummy_addr = (high << 8) | (cpu->op_addr & 0xFF);
+        cpu_read(cpu, dummy_addr);
+        return 1;
+    };
+
+    return 0;
 }
 
 uint8_t am_idr(_cpu* cpu) {
@@ -232,8 +255,19 @@ uint8_t am_idy(_cpu* cpu) {
     uint16_t base = cpu_read(cpu, cpu->pc++);
     uint16_t low = cpu_read(cpu, base & 0x00FF);
     uint16_t high = cpu_read(cpu, (base + 1) & 0x00FF);
-    cpu->op_addr = ((high << 8) | low) + cpu->y;
-    return (cpu->op_addr & 0xFF00) != (high << 8);
+
+    uint16_t ptr_val = (high << 8) | low;
+    cpu->op_addr = ptr_val + cpu->y;
+
+    uint8_t page_crossed = (cpu->op_addr & 0xFF00) != (high << 8);
+
+    if (page_crossed || is_store(cpu)) {
+        uint16_t dummy_addr = (high << 8) | (cpu->op_addr & 0xFF);
+        cpu_read(cpu, dummy_addr);
+        return 1;
+    }
+
+    return 0;
 }
 
 uint8_t am_rel(_cpu* cpu) {
@@ -314,11 +348,14 @@ uint8_t op_arr(_cpu* cpu) {
 
 uint8_t op_asl(_cpu* cpu) {
     uint8_t memory = cpu_fetch(cpu);
+    cpu_write_back(cpu, memory);
+
     uint16_t res = (uint16_t)memory << 1;
+    cpu_write_back(cpu, res);
+
     set_flag(cpu, CARRY, res > 255);
     set_flag(cpu, ZERO, (res & 0xFF) == 0x00);
     set_flag(cpu, NEGATIVE, res & 0x80);
-    cpu_write_back(cpu, res);
 	return 0;
 }
 
@@ -490,8 +527,12 @@ uint8_t op_dcp(_cpu* cpu) {
 }
 
 uint8_t op_dec(_cpu* cpu) {
-    uint8_t memory = cpu_fetch(cpu) - 1;
+    uint8_t memory = cpu_fetch(cpu);
     cpu_write(cpu, cpu->op_addr, memory);
+
+    memory--;
+    cpu_write(cpu, cpu->op_addr, memory);
+
     set_flag(cpu, ZERO, memory == 0x00);
     set_flag(cpu, NEGATIVE, memory & 0x80);
 	return 0;
@@ -525,8 +566,12 @@ uint8_t op_hlt(_cpu* cpu) {
 }
 
 uint8_t op_inc(_cpu* cpu) {
-    uint8_t memory = cpu_fetch(cpu) + 1;
+    uint8_t memory = cpu_fetch(cpu);
     cpu_write(cpu, cpu->op_addr, memory);
+
+    memory++;
+    cpu_write(cpu, cpu->op_addr, memory);
+
     set_flag(cpu, ZERO, memory == 0x00);
     set_flag(cpu, NEGATIVE, memory & 0x80);
 	return 0;
@@ -627,13 +672,14 @@ uint8_t op_ldy(_cpu* cpu) {
 
 uint8_t op_lsr(_cpu* cpu) {
     uint8_t memory = cpu_fetch(cpu);
+    cpu_write_back(cpu, memory);
+
     uint8_t res = memory >> 1;
+    cpu_write_back(cpu, res);
 
     set_flag(cpu, CARRY, memory & 0x01);
     set_flag(cpu, ZERO, res == 0x00);
     set_flag(cpu, NEGATIVE, 0);
-
-    cpu_write_back(cpu, res);
 	return 0;
 }
 
@@ -693,13 +739,14 @@ uint8_t op_plp(_cpu* cpu) {
 
 uint8_t op_rol(_cpu* cpu) {
     uint8_t memory = cpu_fetch(cpu);
+    cpu_write_back(cpu, memory);
+
     uint8_t res = (memory << 1) | get_flag(cpu, CARRY);
+    cpu_write_back(cpu, res);
 
     set_flag(cpu, CARRY, memory & 0x80);
     set_flag(cpu, ZERO, res == 0x00);
     set_flag(cpu, NEGATIVE, res & 0x80);
-
-    cpu_write_back(cpu, res);
 	return 0;
 }
 
@@ -720,13 +767,14 @@ uint8_t op_rla(_cpu* cpu) {
 
 uint8_t op_ror(_cpu* cpu) {
     uint8_t memory = cpu_fetch(cpu);
+    cpu_write_back(cpu, memory);
+
     uint8_t res = (memory >> 1) | (get_flag(cpu, CARRY) << 7);
+    cpu_write_back(cpu, res);
 
     set_flag(cpu, CARRY, memory & 0x01);
     set_flag(cpu, ZERO, res == 0x00);
     set_flag(cpu, NEGATIVE, res & 0x80);
-
-    cpu_write_back(cpu, res);
 	return 0;
 }
 
@@ -753,7 +801,7 @@ uint8_t op_rra(_cpu* cpu) {
 }
 
 uint8_t op_rti(_cpu* cpu) {
-    cpu->p = pull(cpu) & ~BREAK & ~UNUSED;
+    cpu->p = (pull(cpu) & ~BREAK) | UNUSED;
     cpu->pc = pull(cpu);
     cpu->pc |= (uint16_t)pull(cpu) << 8;
 
@@ -969,6 +1017,17 @@ void branch(_cpu* cpu) {
     cpu->pc = res;
 }
 
+uint8_t is_store(_cpu* cpu) {
+    if (cpu->instr.ex_op == op_sta) return 1;
+    if (cpu->instr.ex_op == op_stx) return 1;
+    if (cpu->instr.ex_op == op_sty) return 1;
+    if (cpu->instr.ex_op == op_sax) return 1;
+    if (cpu->instr.ex_op == op_shx) return 1;
+    if (cpu->instr.ex_op == op_shy) return 1;
+    if (cpu->instr.ex_op == op_ahx) return 1;
+    if (cpu->instr.ex_op == op_tas) return 1;
+    return 0;
+}
 
 /* Logging */
 

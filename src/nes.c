@@ -4,7 +4,6 @@
 #include "cpu.h"
 #include "ppu.h"
 #include <string.h>
-#include <stdlib.h>
 
 CNES_RESULT nes_init(_nes* nes) {
     char* rom_path = nes->cart.rom_path;
@@ -17,6 +16,7 @@ CNES_RESULT nes_init(_nes* nes) {
     nes->apu.p_cpu = &nes->cpu;
     nes->ppu.p_cart = &nes->cart;
     nes->ppu.p_cpu = &nes->cpu;
+    nes->cart.p_cpu = &nes->cpu;
 
     nes->cart.rom_path = rom_path;
 

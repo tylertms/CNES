@@ -16,7 +16,7 @@ CNES_RESULT map_irq_pending_0(_cart* cart) {
 }
 
 uint8_t map_cpu_read_0(_cart* cart, uint16_t addr) {
-    uint8_t data = 0x00;
+    uint8_t data = cart->p_cpu->open_bus;
 
     if (0x6000 <= addr && addr <= 0x7FFF) {
         if (cart->prg_ram.size) {
@@ -41,7 +41,7 @@ void map_cpu_write_0(_cart* cart, uint16_t addr, uint8_t data) {
 }
 
 uint8_t map_ppu_read_0(_cart* cart, uint16_t addr) {
-    uint8_t data = 0x00;
+    uint8_t data = cart->p_cpu->open_bus;
 
     if (0x0000 <= addr && addr <= 0x1FFF) {
         if (cart->chr_rom.size) {

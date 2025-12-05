@@ -5,6 +5,7 @@
 #include <stddef.h>
 
 typedef struct _cart _cart;
+typedef struct _cpu _cpu;
 typedef CNES_RESULT (*map_fn_ctrl)(_cart*);
 typedef uint8_t (*map_fn_read)(_cart*, uint16_t);
 typedef void (*map_fn_write)(_cart*, uint16_t, uint8_t);
@@ -66,6 +67,8 @@ typedef struct _cart {
     uint8_t cpu_ppu_timing;
     uint8_t misc_roms;
     uint8_t expansion_device;
+
+    _cpu* p_cpu;
 } _cart;
 
 CNES_RESULT cart_load(_cart* cart);

@@ -414,7 +414,9 @@ void ppu_write(_ppu* ppu, uint16_t addr, uint8_t data) {
 
 uint8_t ppu_cpu_read(_ppu* ppu, uint16_t addr) {
     uint8_t data = 0x00;
-    switch (addr) {
+    uint16_t reg_addr = 0x2000 | (addr & 0x0007);
+
+    switch (reg_addr) {
         case PPUSTATUS: data = ppustatus_cpu_read(ppu); break;
         case OAMDATA:   data = oamdata_cpu_read(ppu);   break;
         case PPUDATA:   data = ppudata_cpu_read(ppu);   break;
@@ -426,8 +428,9 @@ uint8_t ppu_cpu_read(_ppu* ppu, uint16_t addr) {
 
 void ppu_cpu_write(_ppu* ppu, uint16_t addr, uint8_t data) {
     ppu_bus_set(ppu, data);
+    uint16_t reg_addr = 0x2000 | (addr & 0x0007);
 
-    switch (addr) {
+    switch (reg_addr) {
         case PPUCTRL:   ppuctrl_cpu_write(ppu, data);   break;
         case PPUMASK:   ppumask_cpu_write(ppu, data);   break;
         case OAMADDR:   oamaddr_cpu_write(ppu, data);   break;

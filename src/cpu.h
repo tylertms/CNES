@@ -44,6 +44,7 @@ typedef struct _cpu {
     uint8_t opcode;
     uint16_t op_addr;       // address of first operand
     uint8_t op_data;        // data buffer from address mode to operation
+    uint8_t open_bus;
 
     uint8_t halt;           // halt execution
     uint8_t cycles;         // instr cycle counter
@@ -110,6 +111,7 @@ void set_flag(_cpu* cpu, _cpu_flag flag, uint8_t set);
 void push(_cpu* cpu, uint8_t data);
 uint8_t pull(_cpu* cpu);
 void branch(_cpu* cpu);
+uint8_t is_store(_cpu* cpu);
 
 void print_state(_cpu* cpu);
 
